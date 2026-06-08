@@ -1,77 +1,51 @@
-# WWImmo DMS API
+# W&W Immo DMS-API
 
-A unified **REST API** that lets external Document Management Systems (DMS) integrate with WWImmo's
-classic ERPs (**Rimo R5** and **ImmoTop2**) once those ERPs are operated ("ghosted") in the cloud.
+Eine einheitliche **REST-API**, über die Dokumentenmanagement-Systeme (DMS) mit den in der Cloud
+betriebenen ERP-Systemen **Rimo R5** und **ImmoTop2** von W&W Immo Informatik AG zusammenarbeiten.
 
-It replaces the older, database-coupled integrations
-([Rimo R5 DMS Schnittstelle](https://github.com/wwimmo/rimor5-dms-schnittstelle),
-[ImmoTop2 Schnittstelle](https://github.com/wwimmo/immotop2-dms-schnittstelle)), which relied on direct
-ODBC access that is no longer available in the cloud.
+## Geltungsbereich
 
-> **Status: early / lean.** This repository is the home of the DMS API documentation. The API itself is
-> being built in the Polaris stack (C#, modular monolith, REST). The OpenAPI contract is the most mature
-> artefact; the hand-written docs below are being filled in. Sections marked **🚧 NEEDS INPUT** are gaps
-> we know about — see [What we still need](#what-we-still-need).
+Diese API gilt für Kunden, deren ERP **in der Cloud betrieben** wird. Sie ersetzt die bestehenden
+Schnittstellen **nicht**: Kunden mit einer **On-Premise-Installation** nutzen weiterhin die bisherigen
+DMS-Schnittstellen, da diese auf direktem Datenbankzugriff beruhen, der in der Cloud nicht zur Verfügung
+steht.
 
-## Who this is for
+## Für wen ist diese Dokumentation?
 
-Engineers at **partner DMS vendors** who integrate their product with WWImmo-hosted ERPs. Partners
-**poll** this API (pull model) — there are no webhooks or pushes from WWImmo to the partner.
+Für **DMS-Anbieter**, die ihr Produkt an ein cloud-betriebenes W&W-Immo-ERP anbinden. Die Anbindung
+erfolgt über **Polling**: Ihr System ruft die API aktiv ab (Pull). Es gibt keine Webhooks oder Pushes.
 
-## Three things to understand first
+## Drei Dinge, die man zuerst verstehen sollte
 
-1. **Three core flows.** *Import a document*, *import an invoice*, and *archive a document* — see
-   [Use cases](docs/explanation/overview.md#the-three-core-flows).
-2. **Pull / polling model.** Partners discover changes by polling with `?changed_since=...`. This shapes
-   everything: deletes need tombstones, every mutation needs a timestamp, endpoints must be idempotent.
-   See [Conventions](docs/reference/conventions.md).
-3. **The API is an anti-corruption layer.** It speaks a clean, forward-looking domain model
-   (Portfolio → Bookkeeping → …) and translates to the legacy ERP/KrediFlow IDs internally. See
-   [Domain model](docs/explanation/domain-model.md).
+1. **Drei Kernabläufe** – *Dokument importieren*, *Rechnung importieren* und *Dokument archivieren*.
+   Siehe [Übersicht](docs/1-einstieg/1-uebersicht.md).
+2. **Pull-/Polling-Modell** – Änderungen werden über `?changed_since=...` abgerufen. Siehe
+   [Konventionen](docs/3-referenz/2-konventionen.md).
+3. **Klares Domänenmodell** – die API spricht ein eigenständiges Fachmodell (Portfolio → Buchhaltung → …)
+   und ist von ERP-Interna entkoppelt. Siehe [Domänenmodell](docs/4-konzepte/1-domaenenmodell.md).
 
-## Documentation map (Diátaxis)
+## Inhalt
 
-This documentation is organised on the [Diátaxis](https://diataxis.fr/) model — four kinds of docs, each
-answering a different question:
+**1 – Einstieg**
+- [Übersicht](docs/1-einstieg/1-uebersicht.md) – was die API tut, die drei Kernabläufe, das Pull-Modell.
+- [Schnellstart](docs/1-einstieg/2-schnellstart.md) – Token holen und erste Abfrage. *(in Arbeit)*
 
-| Quadrant | Question it answers | Where |
-| --- | --- | --- |
-| **Tutorial** (learning) | "Get me to my first success" | [docs/tutorials/quickstart.md](docs/tutorials/quickstart.md) 🚧 |
-| **How-to** (task) | "How do I do X?" | [docs/how-to/](docs/how-to/) — import document / import invoice / archive |
-| **Reference** (information) | "What exactly is the contract?" | [OpenAPI spec](openapi/) + [docs/reference/](docs/reference/) |
-| **Explanation** (understanding) | "Why is it shaped this way?" | [docs/explanation/](docs/explanation/) — overview, domain model, glossary |
+**2 – Anleitungen**
+- [Dokument importieren](docs/2-anleitungen/1-dokument-importieren.md) – DMS → ERP.
+- [Rechnung importieren](docs/2-anleitungen/2-rechnung-importieren.md) – DMS → ERP → Freigabe.
+- [Dokument archivieren](docs/2-anleitungen/3-dokument-archivieren.md) – ERP → DMS.
 
-Start at [docs/index.md](docs/index.md) for the guided table of contents.
+**3 – Referenz**
+- [OpenAPI-Spezifikation](openapi/README.md) – der verbindliche Vertrag.
+- [Authentifizierung](docs/3-referenz/1-authentifizierung.md) – OAuth 2.0, Token, Scope.
+- [Konventionen](docs/3-referenz/2-konventionen.md) – Polling, `changed_since`, Idempotenz, Schlüssel.
+- [Fehlerbehandlung](docs/3-referenz/3-fehler.md) – Problem+JSON.
 
-## Source material this is built from
+**4 – Konzepte**
+- [Domänenmodell](docs/4-konzepte/1-domaenenmodell.md) – Entitäten, Beziehungen, Lebenszyklus.
+- [Glossar](docs/4-konzepte/2-glossar.md) – Fachbegriffe.
 
-- **OpenAPI contract** — generated from the running service. See [openapi/](openapi/README.md).
-- **Live Swagger UI** — <https://polaris.wwportal-dev.ch/swagger/index.html> (dev environment).
-- **Concept & flows** — ADO Wiki [Konzept DMS-API-Design (1241)](https://dev.azure.com/wwimmo-mobile/mobile/_wiki/wikis/mobile.wiki/1241/Konzept-DMS-API-Design).
-- **Domain model** — ADO Wiki [Domänenmodell (1231)](https://dev.azure.com/wwimmo-mobile/mobile/_wiki/wikis/mobile.wiki/1231/Dom%C3%A4nenmodell).
-- **Endpoint / data structure** — ADO Wiki [Endpoint-Struktur (2476)](https://dev.azure.com/wwimmo-mobile/mobile/_wiki/wikis/mobile.wiki/2476/Endpoint-Struktur-(Portfolio-Bookkeeping)).
-- **Design board** — [Miro](https://miro.com/app/board/uXjVMhPcv8o=/).
+---
 
-## What we still need
-
-These are the critical blocks to make this a usable partner-facing doc set. Tracked inline as
-**🚧 NEEDS INPUT** in the relevant files.
-
-| # | Gap | Where it blocks | Who can provide |
-| --- | --- | --- | --- |
-| 1 | **Base URLs per environment** (dev/test/prod). Spec says `erp.wwimmo.ch/api/v1/dms`; live POC is `polaris.wwportal-dev.ch`. | quickstart, auth | Gabor Raz / DevOps |
-| 2 | **How a partner obtains `client_id` / `client_secret`** (onboarding flow, who issues them). | auth, quickstart | Sandro Brunner (Cidaas) |
-| 3 | **Tombstone / delete semantics** confirmed in the spec (`deleted_at`, retention window). | conventions, OpenAPI | Andrew Service / Martin Constam |
-| 4 | **Pagination & rate-limit contract** (page size, cursor vs offset, limit headers). | conventions, OpenAPI | Backend team |
-| 5 | **Error catalogue** — concrete `type` values and recovery advice beyond the Problem shape. | errors | Backend team |
-| 6 | **Versioning & deprecation policy** for the API and this doc set. | (new) versioning doc | PO + Backend |
-| 7 | **Open domain decisions** that change the contract: `vatcodes` "code for all", `realestatevisas` scope, scope-via-path-vs-payload. | domain-model, OpenAPI | Domain workshops (PSI) |
-| 8 | **Invoice / master-data schemas in OpenAPI** (accounts, cost centers, creditors) — currently only in the wiki, not the spec. | OpenAPI, import-an-invoice | Backend team |
-
-## Conventions for editing these docs
-
-- Markdown, one concept per file. Keep the Diátaxis quadrants separate — don't let a how-to become a reference dump.
-- The **OpenAPI spec is the single source of truth** for the wire contract. Hand-written docs explain
-  *meaning, relationships, lifecycle* — things OpenAPI can't carry well — and link to the spec rather than
-  duplicating field tables.
-- Mark anything unverified with **🚧 NEEDS INPUT** so gaps stay visible.
+> Die Dokumentation befindet sich im Aufbau. Hinweise für Mitwirkende sowie der Stand offener Punkte
+> stehen in [CONTRIBUTING.md](CONTRIBUTING.md).

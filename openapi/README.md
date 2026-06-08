@@ -1,34 +1,25 @@
-# OpenAPI reference (the wire contract)
+# OpenAPI-Referenz (der Wire-Vertrag)
 
-The **OpenAPI specification is the single source of truth** for the wire contract — paths, methods,
-request/response schemas, field types. The hand-written docs in [../docs/](../docs/) explain *meaning,
-relationships and lifecycle* and link here rather than duplicating field tables.
+Die **OpenAPI-Spezifikation ist die einzige Quelle der Wahrheit** für den Wire-Vertrag – Pfade, Methoden,
+Request-/Response-Schemas, Feldtypen. Die handgeschriebene Doku unter [../docs/](../docs/) erklärt
+*Bedeutung, Beziehungen und Lebenszyklus* und verweist hierher, statt Feldtabellen zu duplizieren.
 
-## Where the spec lives
+## Was die Spezifikation heute abdeckt
 
-- **Live Swagger UI (dev):** <https://polaris.wwportal-dev.ch/swagger/index.html>
-- **Generated from:** the running DMS module in the Polaris backend
-  (`poc-polaris-backend/backend/DokumentManagementSystem`). The hand-authored draft contract is
-  `dms-api.yaml` in that module.
-
-We intentionally **do not vendor a copy here yet** to avoid drift while the spec is changing fast. At the
-first stable release, snapshot the spec into this folder as `dms-api.v1.yaml` and version it alongside the
-docs (see versioning gap #6).
-
-## What the spec covers today
-
-- `POST /documents`, `GET /documents` (requires `changed_since`), `GET /documents/{uuid}`,
+- `POST /documents`, `GET /documents` (erfordert `changed_since`), `GET /documents/{uuid}`,
   `PUT /documents/{uuid}`, `GET /documents/{uuid}/content`.
-- Master data (`GET`, with `changed_since` + `changed_until`): `/realestates` (+ `/{uuid}`,
+- Stammdaten (`GET`, mit `changed_since` + `changed_until`): `/realestates` (+ `/{uuid}`,
   `/number:{number}`), `/houses`, `/units`, `/appliances`, `/tenants`, `/tenancies` (+ `/{uuid}`).
-- Schemas: `DocumentEntity`, `DocumentLinkEntity`, `RealestateEntity`, list wrappers, `Problem`.
-- Security: `bearerAuth` (JWT). See [authentication](../docs/reference/authentication.md).
+- Schemas: `DocumentEntity`, `DocumentLinkEntity`, `RealestateEntity`, Listen-Hüllen, `Problem`.
+- Sicherheit: `bearerAuth` (JWT). Siehe [Authentifizierung](../docs/3-referenz/1-authentifizierung.md).
 
-## Known gaps in the spec (from the spec's own `info.description` + our review)
+## Noch nicht enthalten
 
-- 🚧 **Invoice flow & accounting master data** (accounts, cost centers, creditors, vatcodes, invoices) —
-  defined in the [Endpoint-Struktur wiki](https://dev.azure.com/wwimmo-mobile/mobile/_wiki/wikis/mobile.wiki/2476/Endpoint-Struktur-(Portfolio-Bookkeeping)) but **not yet in the spec** (gap #8).
-- 🚧 **Delete / replace / file versioning** of documents — open question in the spec.
-- 🚧 **Per-entity attribute completeness**, **tombstones** (`deleted_at`), **pagination**, **rate-limit
-  responses** — see [conventions](../docs/reference/conventions.md).
-- The spec notes barcode/filedate/archiveid/linkid attributes are still under discussion.
+- **Rechnungs- & Buchhaltungs-Stammdaten** (Konten, Kostenstellen, Kreditoren, MWST-Codes, Rechnungen) –
+  fachlich im Wiki definiert, aber noch nicht in der Spezifikation.
+- **Löschen / Ersetzen / Versionierung** von Dokumenten.
+- **Tombstones** (`deleted_at`), **Paginierung** und **Rate-Limit-Antworten** – siehe
+  [Konventionen](../docs/3-referenz/2-konventionen.md).
+
+> Eine versionierte Momentaufnahme der Spezifikation wird zum ersten stabilen Release in diesem Ordner
+> abgelegt (`dms-api.v1.yaml`). Bis dahin ist der generierte Vertrag aus dem laufenden Dienst massgeblich.
