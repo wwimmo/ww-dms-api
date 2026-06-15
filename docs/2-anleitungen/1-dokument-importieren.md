@@ -33,7 +33,7 @@ E-Rechnung.
      "filedate": "2026-01-15T10:00:00Z",
      "storageTargets": ["DMS"],
      "links": [
-       { "id": "<liegenschaft-uuid>", "entity-type": "realeestate" },
+       { "id": "<liegenschaft-uuid>", "entity-type": "realestate" },
        { "id": "<objekt-uuid>", "entity-type": "unit" }
      ]
    }
@@ -45,6 +45,9 @@ E-Rechnung.
    ```
    PUT /documents/{id}
    ```
+
+   Ein nicht mehr benötigtes Dokument lässt sich mit `DELETE /documents/{id}` endgültig entfernen
+   (Antwort `204`).
 
 ## Ablauf
 
@@ -66,7 +69,9 @@ sequenceDiagram
 
 ## Hinweise
 
-- `links[].entity-type` (laut Spezifikation): `realeestate`, `houses`, `units`, `appliance`, `tenant`,
-  `tenancy`.
+- `links[].entity-type` (gültige Werte, Gross-/Kleinschreibung egal): `realestate`, `house`, `unit`,
+  `appliance`, `tenant`, `tenancy`.
+- `type` (gültige Werte): `invoice`, `credit`, `correspondence`, `assurance`.
+- `storageTargets` (gültige Werte): `DMS`, `ERP`.
 - Für Rechnungen mit Freigabeprozess verwenden Sie stattdessen
   [Rechnung importieren](2-rechnung-importieren.md).

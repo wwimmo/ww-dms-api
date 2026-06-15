@@ -12,25 +12,52 @@ ist der Dokumentimport plus die Rechnungsverarbeitung.
 
 ## Schritte
 
-1. **Stammdaten aktualisieren**, inklusive Rechnungs-Stammdaten:
+1. **Buchhaltungs-Stammdaten aktualisieren** (für korrekte Kontierung und Zuordnung):
 
    ```
-   GET /realestates?changed_since=...&changed_until=...
-   GET /units?changed_since=...&changed_until=...
-   GET /creditors?changed_since=...        (noch nicht in der Spezifikation)
+   GET /bookkeepings?changed_since=...&changed_until=...
+   GET /creditors?changed_since=...&changed_until=...
+   GET /accounts?changed_since=...&changed_until=...
+   GET /cost-centers?changed_since=...&changed_until=...
+   GET /vat-codes?changed_since=...&changed_until=...
    ```
 
-2. **Dokument anlegen.** Das ERP legt daraus die Rechnung an und übergibt sie dem Freigabeprozess. Bei
-   Bedarf werden Kreditor/Konto angelegt:
+2. **Dokument bereitstellen.** Die Rechnung verweist auf eine **bereits abgelegte Datei** über deren
+   `fileId`. Legen Sie das Dokument zuvor wie unter
+   [Dokument importieren](1-dokument-importieren.md) an (`POST /documents`) bzw. archivieren Sie es, und
+   merken Sie sich dessen `id`.
+
+3. **Rechnung übergeben.** Senden Sie die Rechnung im KrediFlow-Format an `POST /invoices`. Die API
+   validiert sie und übergibt sie dem Freigabeprozess. Die Antwort enthält die angelegte Rechnung inkl.
+   Status; bei Validierungsfehlern antwortet die API mit `400` und Details.
 
    ```
-   POST /documents   → Datei anlegen
-                     → optional Kreditor/Konto anlegen
-                     → Rechnung im Freigabeprozess anlegen
+   POST /invoices
+   Content-Type: application/json
+
+   {
+     "invoices": [
+       {
+         "invoice": {
+           "invoicenumber": "2026-00042",
+           "type": 1,
+           "date": "2026-01-15T00:00:00Z",
+           "amount": 1234.55,
+           "bookkeepingid": "<buchhaltung-uuid>",
+           "fileId": "<dokument-uuid>",
+           "creditor": { "name1": "EKZ AG" },
+           "paymentinfo": { "iban": "CH..", "reference": "..." },
+           "accountings": [
+             { "accountid": "<konto-uuid>", "amount": 1234.55, "vatcodeid": "<mwst-uuid>" }
+           ]
+         }
+       }
+     ]
+   }
    ```
 
-3. **Aktualisieren** Sie das Dokument danach (`PUT /documents/{id}`), falls sich Metadaten oder die
-   DMS-Referenz ändern.
+   Eine fälschlich übergebene Rechnung lässt sich mit `DELETE /invoices/{id}` entfernen – solange sie
+   noch nicht verbucht ist (sonst `409 Conflict`).
 
 ## Ablauf
 
@@ -40,27 +67,19 @@ sequenceDiagram
   participant API as DMS-API
   participant ERP
   participant WF as Freigabe
-  DMS->>API: GET /realestates?changed_since=...
-  DMS->>API: GET /units?changed_since=...
-  DMS->>DMS: Dokument neu
-  DMS->>+API: POST /documents
-  API->>ERP: Datei anlegen
-  API->>ERP: optional Kreditor/Konto anlegen
-  API->>WF: Rechnung anlegen
-  API-->>-DMS: { id: "..." }
-  DMS->>+API: PUT /documents/{id}
-  API->>ERP: Datei aktualisieren
-  API-->>-DMS: 200
+  DMS->>API: GET /bookkeepings, /creditors, /accounts ... (changed_since)
+  DMS->>+API: POST /documents (Datei bereitstellen)
+  API-->>-DMS: { id: "..." }   (= fileId)
+  DMS->>+API: POST /invoices { invoice: { bookkeepingid, fileId, ... } }
+  API->>API: Rechnung validieren
+  API->>WF: Rechnung in Freigabeprozess anlegen
+  API-->>-DMS: 201 { Rechnung inkl. Status }
 ```
 
 ## Das Rechnungs-Datenmodell
 
 Rechnungen hängen an der **Buchhaltung** (`bookkeepingid`) und tragen Kreditor, Zahlinformationen,
-Buchungszeilen und einen Workflow-Bezug. Die vollständigen Strukturen `invoices` und `accountings` stehen
-im [Domänenmodell](../4-konzepte/1-domaenenmodell.md#buchhaltungs-entitäten).
-
-## Stand
-
-- Die Rechnungs-/Stammdaten-Endpunkte (`/creditors`, `/accounts`, `/invoices`, MWST-Codes, Kostenstellen)
-  sind **noch nicht in der OpenAPI-Spezifikation** enthalten – dieser Ablauf ist derzeit konzeptionell
-  beschrieben und wird ergänzt.
+Buchungszeilen (`accountings`) und einen Datei-Bezug (`fileId` auf ein bereits abgelegtes Dokument). Die
+vollständigen Strukturen (`InvoiceUploadRequest`, `InvoiceData`, `InvoiceAccountingData`, …) stehen in der
+[OpenAPI-Spezifikation](../../openapi/README.md); die fachliche Einordnung im
+[Domänenmodell](../4-konzepte/1-domaenenmodell.md#buchhaltungs-entitäten).

@@ -36,8 +36,8 @@ Sie konsumieren die API ausschliesslich durch **Abrufen** – typischerweise
 [Konventionen](../3-referenz/2-konventionen.md) beschrieben sind:
 
 - Jede Änderung trägt einen Zeitstempel, damit `changed_since` sie findet.
-- Löschungen werden über Tombstones erkennbar gemacht (ein gelöschter Datensatz bleibt eine Zeit lang mit
-  Lösch-Markierung sichtbar).
+- Löschungen erfolgen heute endgültig (`DELETE`); eine Tombstone-Semantik für lückenfreies Polling ist
+  noch nicht festgelegt – siehe [Konventionen](../3-referenz/2-konventionen.md#löschungen).
 - Aufrufe sind idempotent – ein wiederholter Abruf verarbeitet nichts doppelt.
 
 ## Das Domänenmodell
