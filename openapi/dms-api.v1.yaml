@@ -25,14 +25,12 @@ info:
     4. Abort after 5 retries (~30s total).
   version: v1
 servers:
-- url: https://{host}
-  description: >-
-    Die Basis-URL je Umgebung (Dev/Test/Prod) wird beim Onboarding bereitgestellt.
-    Alle Pfade sind relativ zum Host und beginnen mit /api/v1/dms.
-  variables:
-    host:
-      default: erp.wwimmo.ch
-      description: Host der Zielumgebung (Platzhalter; verbindlicher Wert beim Onboarding).
+- url: https://erp.wwimmo.ch
+  description: Produktion
+- url: https://erp-test.wwimmo.ch
+  description: Test
+- url: https://erp-dev.wwimmo.ch
+  description: Entwicklung
 paths:
   /api/v1/dms/health:
     get:

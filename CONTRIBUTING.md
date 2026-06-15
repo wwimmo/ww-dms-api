@@ -38,7 +38,6 @@ nummerierte Lücken sichtbar – dort höchstens neutral „wird ergänzt".
 
 | # | Lücke | Blockiert | Wer liefert |
 | --- | --- | --- | --- |
-| 1 | **Basis-URLs je Umgebung** (Dev/Test/Prod). Spec-Platzhalter `erp.wwimmo.ch`, Live-Dev ist `polaris.wwportal-dev.ch`. | Schnellstart, Auth, OpenAPI `servers` | Gabor Raz / DevOps |
 | 2 | **Wie ein Anbieter `client_id`/`client_secret` erhält** (Onboarding, Rotation). | Auth, Schnellstart | Sandro Brunner |
 | 3 | **Tombstone-/Delete-Semantik** im Vertrag (`deleted_at`, Aufbewahrung). Heute löschen `DELETE`-Endpunkte hart. | Konventionen, OpenAPI | Andrew Service / Martin Constam |
 | 6 | **Versionierungs- & Deprecation-Policy** für API und Doku. | (neue Seite) | PO + Backend |
@@ -46,6 +45,7 @@ nummerierte Lücken sichtbar – dort höchstens neutral „wird ergänzt".
 
 > **Erledigt** durch die Synchronisierung der Doku mit der Implementierung (generierte OpenAPI-Spec
 > + Referenz-Korrekturen):
+> - ~~#1 Basis-URLs je Umgebung~~ – Prod `erp.wwimmo.ch`, Test `erp-test.wwimmo.ch`, Dev `erp-dev.wwimmo.ch`; in `servers`, Auth und Schnellstart eingetragen.
 > - ~~#4 Paginierung & Rate-Limit-Vertrag~~ – in `konventionen.md` und der Spec (Header, `Link`, `page`/`page_size`).
 > - ~~#5 Fehlerkatalog (Statuscodes)~~ – `fehler.md` an den Code angeglichen; konkrete `type`-Werte weiterhin offen.
 > - ~~#8 Rechnungs-/Stammdaten-Schemas in OpenAPI~~ – jetzt vollständig in `openapi/dms-api.v1.yaml`.

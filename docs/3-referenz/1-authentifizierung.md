@@ -47,8 +47,17 @@ GET {basis-url}/api/v1/dms/documents?changed_since=2026-01-01T00:00:00Z
 Authorization: Bearer <token>
 ```
 
+## Basis-URLs
+
+| Umgebung | Basis-URL |
+| --- | --- |
+| Produktion | `https://erp.wwimmo.ch` |
+| Test | `https://erp-test.wwimmo.ch` |
+| Entwicklung | `https://erp-dev.wwimmo.ch` |
+
+Alle Pfade beginnen mit `/api/v1/dms`, z. B. `https://erp.wwimmo.ch/api/v1/dms/token`.
+
 ## Offen
 
-- Die **Basis-URL je Umgebung** (Dev/Test/Prod) wird noch festgelegt und hier ergänzt.
 - Das **Verfahren zur Ausgabe von `client_id`/`client_secret`** (Onboarding, Rotation) wird noch
   beschrieben.

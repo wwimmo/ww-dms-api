@@ -1,7 +1,7 @@
 # Schnellstart
 
-> Der kürzeste Weg von null zu „die API antwortet". *Dieser Leitfaden wird noch vervollständigt, sobald
-> die Basis-URL je Umgebung und das Verfahren zur Ausgabe der Zugangsdaten feststehen.*
+> Der kürzeste Weg von null zu „die API antwortet". *Das Verfahren zur Ausgabe der Zugangsdaten
+> (`client_id`/`client_secret`) wird noch ergänzt.*
 
 ## Ziel
 
@@ -10,12 +10,13 @@ Am Ende haben Sie ein Token angefordert, nach Dokumenten abgefragt und den Inhal
 ## 0. Voraussetzungen
 
 - Eine `client_id` und ein `client_secret` (werden Ihnen bereitgestellt).
-- Die Basis-URL der Zielumgebung.
+- Die Basis-URL der Zielumgebung: Produktion `https://erp.wwimmo.ch`, Test `https://erp-test.wwimmo.ch`,
+  Entwicklung `https://erp-dev.wwimmo.ch`.
 
-Platzhalter setzen:
+Platzhalter setzen (hier: Entwicklung):
 
 ```bash
-BASE_URL="https://<umgebung>/api/v1/dms"
+BASE_URL="https://erp-dev.wwimmo.ch/api/v1/dms"
 CLIENT_ID="<ihre-client-id>"
 CLIENT_SECRET="<ihr-client-secret>"
 ```
