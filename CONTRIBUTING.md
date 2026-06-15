@@ -22,7 +22,9 @@ Navigation in VS Code, GitHub und späteren Static-Site-Generatoren stimmt.
 ## Quellenmaterial (intern)
 
 - **OpenAPI-Vertrag** – generiert aus dem laufenden DMS-Modul im Cloud-Backend
-  (Repo-Pfad `…/DokumentManagementSystem`, Entwurf `dms-api.yaml`).
+  (Repo-Pfad `…/DokumentManagementSystem`). Die generierte Momentaufnahme liegt als
+  [`openapi/dms-api.v1.yaml`](openapi/dms-api.v1.yaml) im Repo. Bei Backend-Änderungen neu generieren
+  (`/swagger/v1/swagger.json` des laufenden Dienstes → YAML) und ersetzen.
 - **Live Swagger UI (Dev):** <https://polaris.wwportal-dev.ch/swagger/index.html>
 - **Konzept & Abläufe:** ADO-Wiki [Konzept DMS-API-Design (1241)](https://dev.azure.com/wwimmo-mobile/mobile/_wiki/wikis/mobile.wiki/1241/Konzept-DMS-API-Design).
 - **Domänenmodell:** ADO-Wiki [Domänenmodell (1231)](https://dev.azure.com/wwimmo-mobile/mobile/_wiki/wikis/mobile.wiki/1231/Dom%C3%A4nenmodell).
@@ -36,14 +38,22 @@ nummerierte Lücken sichtbar – dort höchstens neutral „wird ergänzt".
 
 | # | Lücke | Blockiert | Wer liefert |
 | --- | --- | --- | --- |
-| 1 | **Basis-URLs je Umgebung** (Dev/Test/Prod). Spec nennt `erp.wwimmo.ch/api/v1/dms`, Live-Dev ist `polaris.wwportal-dev.ch`. | Schnellstart, Auth | Gabor Raz / DevOps |
+| 1 | **Basis-URLs je Umgebung** (Dev/Test/Prod). Spec-Platzhalter `erp.wwimmo.ch`, Live-Dev ist `polaris.wwportal-dev.ch`. | Schnellstart, Auth, OpenAPI `servers` | Gabor Raz / DevOps |
 | 2 | **Wie ein Anbieter `client_id`/`client_secret` erhält** (Onboarding, Rotation). | Auth, Schnellstart | Sandro Brunner |
-| 3 | **Tombstone-/Delete-Semantik** im Vertrag (`deleted_at`, Aufbewahrung). | Konventionen, OpenAPI | Andrew Service / Martin Constam |
-| 4 | **Paginierung & Rate-Limit-Vertrag** (Seitengrösse, Cursor/Offset, Header). | Konventionen, OpenAPI | Backend |
-| 5 | **Fehlerkatalog** – konkrete `type`-Werte + Recovery. | Fehler | Backend |
+| 3 | **Tombstone-/Delete-Semantik** im Vertrag (`deleted_at`, Aufbewahrung). Heute löschen `DELETE`-Endpunkte hart. | Konventionen, OpenAPI | Andrew Service / Martin Constam |
 | 6 | **Versionierungs- & Deprecation-Policy** für API und Doku. | (neue Seite) | PO + Backend |
 | 7 | **Offene Domänenentscheide** mit Vertragswirkung: `vatcodes` „für alle", `realestatevisas`-Scope, Scope via Pfad vs. Payload. | Domänenmodell, OpenAPI | Domänen-Workshops (PSI) |
-| 8 | **Rechnungs-/Stammdaten-Schemas in OpenAPI** (accounts, costcenters, creditors, invoices) – heute nur im Wiki. | OpenAPI, Rechnung importieren | Backend |
+
+> **Erledigt** durch die Synchronisierung der Doku mit der Implementierung (generierte OpenAPI-Spec
+> + Referenz-Korrekturen):
+> - ~~#4 Paginierung & Rate-Limit-Vertrag~~ – in `konventionen.md` und der Spec (Header, `Link`, `page`/`page_size`).
+> - ~~#5 Fehlerkatalog (Statuscodes)~~ – `fehler.md` an den Code angeglichen; konkrete `type`-Werte weiterhin offen.
+> - ~~#8 Rechnungs-/Stammdaten-Schemas in OpenAPI~~ – jetzt vollständig in `openapi/dms-api.v1.yaml`.
+>
+> **Beim Backend zu melden:** Der Token-Endpunkt weicht vom OAuth-Standard ab – Request als JSON
+> (`{client_id, client_secret}`, kein `grant_type`) statt `application/x-www-form-urlencoded`, Antwort
+> mit `token`/`tokenType`/`expiresIn`/`expiresAt` statt `access_token`/`token_type`/`expires_in`. Die Doku
+> beschreibt aktuell den Ist-Zustand. Entscheid „Doku an Code" vs. „Code an Standard" offen.
 
 ## Redaktionsregeln
 
