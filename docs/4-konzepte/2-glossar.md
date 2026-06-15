@@ -24,7 +24,9 @@ Bezeichnern in der API.
 | Rechnung | Invoice | Rechnung oder Gutschrift, die in den Freigabeprozess läuft. |
 | Gutschrift | Credit | Eine Gutschrift; ein Wert des Dokument-`type`. |
 | Kontierung | Accounting | Buchungszeile zu einer Rechnung. |
-| Visum / Visumspfad | RealestateVisa | Freigabeschritt / Freigabepfad im Rechnungsprozess. |
+| Visum / Visumspfad | RealestateVisa | Freigabeschritt / Freigabepfad im Rechnungsprozess (Rollen 1–3). |
+| Benutzer | User | ERP-Benutzer; Basis für Visa- und Workflow-Zuweisungen. |
+| Auftrag | Order | Arbeitsauftrag aus dem Portal (mit Status und mehrsprachigen Texten). |
 | E-Dossier | E-Dossier | Die elektronische Dokumentenakte des ERP je Objekt, in der Dokumente verlinkt werden. |
 | Stammdaten | Master data | Stabile, langlebige Bezugsdaten (die Objekte, an die Dokumente hängen). |
 | DMS | DMS | Das Dokumentenmanagement-System des Anbieters. |
