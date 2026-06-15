@@ -24,11 +24,9 @@ CLIENT_SECRET="<ihr-client-secret>"
 
 ```bash
 curl -s -X POST "$BASE_URL/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials" \
-  -d "client_id=$CLIENT_ID" \
-  -d "client_secret=$CLIENT_SECRET"
-# → { "access_token": "...", "token_type": "Bearer", "expires_in": ... }
+  -H "Content-Type: application/json" \
+  -d "{\"client_id\":\"$CLIENT_ID\",\"client_secret\":\"$CLIENT_SECRET\"}"
+# → { "token": "...", "tokenType": "Bearer", "expiresIn": 3600, "expiresAt": "..." }
 ```
 
 Token zwischenspeichern und wiederverwenden – der Token-Endpunkt ist auf 30 Anfragen/Minute begrenzt.
@@ -37,7 +35,7 @@ Siehe [Authentifizierung](../3-referenz/1-authentifizierung.md).
 ## 2. Dokumente abfragen
 
 ```bash
-TOKEN="<access_token aus Schritt 1>"
+TOKEN="<token aus Schritt 1>"
 curl -s "$BASE_URL/documents?changed_since=2026-01-01T00:00:00Z" \
   -H "Authorization: Bearer $TOKEN"
 ```
