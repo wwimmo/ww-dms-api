@@ -9,8 +9,10 @@ generiert.
 
 ## Anzeigen
 
+- **Online (Swagger UI):** <https://wwimmo.github.io/ww-dms-api/> – wird per GitHub Pages aus dieser
+  Spezifikation veröffentlicht (siehe `.github/workflows/pages.yml`).
 - In VS Code mit einer OpenAPI-/Swagger-Vorschau-Erweiterung.
-- Als HTML, z. B. `npx @redocly/cli preview-docs openapi/dms-api.v1.yaml`.
+- Lokal als HTML, z. B. `npx @redocly/cli preview-docs openapi/dms-api.v1.yaml`.
 
 ## Was die Spezifikation abdeckt
 
