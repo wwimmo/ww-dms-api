@@ -1,0 +1,19 @@
+meta {
+  name: Mietverhaeltnis nach UUID
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/tenancies/{{tenancyId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Einzelnes Mietverhältnis per UUID. {{tenancyId}} stammt aus 'Mietverhältnisse synchronisieren'.
+}

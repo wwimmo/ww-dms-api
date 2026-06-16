@@ -1,0 +1,19 @@
+meta {
+  name: Liegenschaft nach UUID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/realestates/{{realestateId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Einzelne Liegenschaft per UUID. {{realestateId}} stammt aus 'Liegenschaften synchronisieren'. 404, wenn für Ihren Mandanten nicht sichtbar.
+}

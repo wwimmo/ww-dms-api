@@ -1,0 +1,19 @@
+meta {
+  name: Kreditor nach UUID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/creditors/{{creditorId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Einzelner Kreditor per UUID. {{creditorId}} stammt aus 'Kreditoren synchronisieren'.
+}

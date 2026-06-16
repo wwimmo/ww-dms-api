@@ -1,0 +1,19 @@
+meta {
+  name: Portfolio nach UUID
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/portfolios/{{portfolioId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Einzelnes Portfolio per UUID. {{portfolioId}} stammt aus 'Portfolios synchronisieren'.
+}

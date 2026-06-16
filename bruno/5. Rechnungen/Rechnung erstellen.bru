@@ -1,0 +1,49 @@
+meta {
+  name: Rechnung erstellen
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/invoices
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "version": "1.0.0",
+    "originsystem": "MeinDMS",
+    "invoices": [
+      {
+        "invoice": {
+          "invoicenumber": "INV-001",
+          "type": 1,
+          "date": "2026-01-15T00:00:00",
+          "amount": 1260.90,
+          "bookkeepingid": "{{bookkeepingId}}",
+          "fileId": "00000000-0000-0000-0000-000000000000",
+          "creditor": { "name1": "Beispiel Kreditor AG" }
+        }
+      }
+    ]
+  }
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setVar("invoiceId", res.body.id);
+  }
+}
+
+docs {
+  Erstellt eine Rechnung und startet den Freigabe-/Visumsworkflow im ERP.
+  `bookkeepingid` ist erforderlich (Buchungskreis-Anker; aus 'Buchungskreise
+  synchronisieren' beziehen oder UUID einsetzen). `fileId` ist erforderlich: die UUID
+  des bereits archivierten Dokuments — es wird nur die ID übergeben, nie der
+  Dateiinhalt. Die erzeugte ID wird als {{invoiceId}} gespeichert. Antwort: 201.
+}

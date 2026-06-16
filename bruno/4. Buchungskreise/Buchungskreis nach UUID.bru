@@ -1,0 +1,19 @@
+meta {
+  name: Buchungskreis nach UUID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/bookkeepings/{{bookkeepingId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Einzelner Buchungskreis per UUID. {{bookkeepingId}} stammt aus 'Buchungskreise synchronisieren'.
+}
