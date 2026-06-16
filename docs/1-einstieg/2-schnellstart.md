@@ -10,7 +10,7 @@ Am Ende haben Sie ein Token angefordert, nach Dokumenten abgefragt und den Inhal
 ## 0. Voraussetzungen
 
 - Eine `client_id` und ein `client_secret` (werden Ihnen bereitgestellt).
-- Die Basis-URL der Zielumgebung: Test `https://erp-test.wwimmo.ch` oder Produktion `https://erp.wwimmo.ch`.
+- Die Basis-URL der Test-Umgebung: `https://erp-test.wwimmo.ch` (die Produktions-URL erhalten Sie beim Onboarding).
 
 Platzhalter setzen (hier: Test):
 

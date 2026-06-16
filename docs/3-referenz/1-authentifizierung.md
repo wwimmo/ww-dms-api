@@ -52,9 +52,9 @@ Authorization: Bearer <token>
 | Umgebung | Basis-URL |
 | --- | --- |
 | Test | `https://erp-test.wwimmo.ch` |
-| Produktion | `https://erp.wwimmo.ch` |
 
-Alle Pfade beginnen mit `/api/v1/dms`, z. B. `https://erp.wwimmo.ch/api/v1/dms/token`.
+Alle Pfade beginnen mit `/api/v1/dms`, z. B. `https://erp-test.wwimmo.ch/api/v1/dms/token`. Die
+**Produktions-URL** erhalten Sie beim Onboarding.
 
 ## Offen
 

@@ -27,8 +27,6 @@ info:
 servers:
 - url: https://erp-test.wwimmo.ch
   description: Test
-- url: https://erp.wwimmo.ch
-  description: Produktion
 paths:
   /api/v1/dms/health:
     get:
