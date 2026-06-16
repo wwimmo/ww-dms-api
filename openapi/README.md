@@ -43,8 +43,6 @@ generiert.
 - **Löschungen / Aufbewahrung.** Heute löschen `DELETE`-Endpunkte hart (204). Eine Tombstone-Semantik
   (`deleted_at`, Aufbewahrungsfrist) für lückenfreies Polling ist noch nicht festgelegt – siehe
   [Konventionen](../docs/3-referenz/2-konventionen.md#löschungen).
-- **Einzelne fachliche Feinheiten** mit Vertragswirkung (z. B. MWST-Code „für alle", Scope von
-  `realestate-visas`) – siehe [Domänenmodell](../docs/4-konzepte/1-domaenenmodell.md).
 
 > `enum`-Werte einzelner String-Felder (z. B. Dokument-`type`, Verknüpfungs-`entity-type`,
 > `storageTargets`) sind in der Spezifikation als `string` typisiert; die gültigen Werte stehen im

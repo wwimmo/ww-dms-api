@@ -126,14 +126,4 @@ Löschung:    DELETE /documents/{uuid} → endgültige Löschung (204)
 > [Konventionen](../3-referenz/2-konventionen.md#löschungen)). Ob Dokumente einen expliziten Status tragen
 > und ob Ersetzen/Versionierung unterstützt wird, ist noch offen und wird ergänzt.
 
-## Offene Punkte mit Vertragswirkung
-
-Diese Entscheidungen verändern Feldform oder Endpunktstruktur – bitte noch nicht fest darauf
-programmieren:
-
-- **MWST-Code „für alle"** – wie der Fall „gilt für alle Buchhaltungen" am Endpunkt abgebildet wird.
-- **Scope von `realestatevisas`** – je Liegenschaft, je Buchhaltung oder je Portfolio.
-- **Scope via Pfad vs. Payload** – ob `bookkeepingid`/`portfolioid` Payload-Felder oder Pfad-Parameter
-  sind (z. B. `GET /bookkeepings/{id}/accounts`).
-
 Begriffsdefinitionen im [Glossar](2-glossar.md).
