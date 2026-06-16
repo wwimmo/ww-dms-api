@@ -21,7 +21,7 @@ Alles, was die API tut, dient einem dieser drei Abläufe:
 | Ablauf | Richtung | Was übertragen wird | Beispiel |
 | --- | --- | --- | --- |
 | **Dokument importieren** | DMS → ERP | Dokument liegt zuerst im DMS; die Metadaten (ohne Dateiinhalt) gehen ans ERP, das sie im E-Dossier verlinkt. | Eingescannte Kreditorenrechnungen/-gutschriften, E-Rechnungen. |
-| **Rechnung importieren** | DMS → ERP → Freigabe | Wie ein Dokumentimport, zusätzlich verarbeitet das ERP die Rechnung im Freigabeprozess. | Lieferantenrechnung mit Visumspflicht. |
+| **Rechnung importieren** | DMS → ERP | Wie ein Dokumentimport, zusätzlich wird die im DMS freigegebene Rechnung ins ERP zur Verbuchung importiert. | Lieferantenrechnung (Kreditorenbeleg). |
 | **Dokument archivieren** | ERP → DMS | Dokument entsteht im ERP; das DMS holt Metadaten und Datei, archiviert sie und meldet den Erfolg zurück. | Buchungsbelege zu manuellen Buchungen, Mahnbriefe aus dem Mahnlauf. |
 
 > Öffnen, Anzeigen und Publizieren von Dokumenten im Portal funktioniert wie bisher und ist **nicht Teil**

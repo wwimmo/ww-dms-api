@@ -27,7 +27,7 @@ generiert.
 - **Buchhaltung & Rechnungen (Kreditorenprozess):** `/bookkeepings` (+ `/{uuid}`), `/creditors`
   (GET/POST, + `/{uuid}`), `/accounts` (GET/POST), `/payment-accounts`, `/payoutbankaccounts`,
   `/payoutbankaccountbookkeepings`, `/cost-centers`, `/account-cost-centers`, `/vat-codes`,
-  `/accountings-history`, `/realestate-visas`, `/orders` (+ `/{uuid}`), `/invoices`
+  `/accountings-history`, `/orders` (+ `/{uuid}`), `/invoices`
   (GET/POST, + `/{uuid}` GET/DELETE).
 - **Betrieb:** `GET /health`, `GET /info`, `POST /token` (Authentifizierung).
 - **Querschnitt:** Paginierung (`page`, `page_size`, `Link`-Header), Rate-Limit-Header

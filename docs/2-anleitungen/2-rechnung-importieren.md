@@ -1,7 +1,7 @@
-# Rechnung importieren (DMS → ERP → Freigabe)
+# Rechnung importieren (DMS → ERP)
 
-Ziel: Eine Rechnung aus Ihrem DMS wird ins ERP importiert **und** in den Freigabeprozess übergeben. Das
-ist der Dokumentimport plus die Rechnungsverarbeitung.
+Ziel: Eine Rechnung aus Ihrem DMS wird ins ERP importiert (zur Verbuchung). Der Freigabe-/Visumsprozess
+läuft im DMS und ist **nicht Teil dieser API**.
 
 ## Voraussetzungen
 
@@ -27,8 +27,8 @@ ist der Dokumentimport plus die Rechnungsverarbeitung.
    [Dokument importieren](1-dokument-importieren.md) an (`POST /documents`) bzw. archivieren Sie es, und
    merken Sie sich dessen `id`.
 
-3. **Rechnung übergeben.** Senden Sie die Rechnung im KrediFlow-Format an `POST /invoices`. Die API
-   validiert sie und übergibt sie dem Freigabeprozess. Die Antwort enthält die angelegte Rechnung inkl.
+3. **Rechnung importieren.** Senden Sie die Rechnung im KrediFlow-Format an `POST /invoices`. Die API
+   validiert sie und legt sie im ERP an. Die Antwort enthält die angelegte Rechnung inkl.
    Status; bei Validierungsfehlern antwortet die API mit `400` und Details.
 
    Den genauen Request-Aufbau (`InvoiceUploadRequest` mit `bookkeepingid`-Anker, `fileId`-Bezug,
@@ -45,13 +45,12 @@ sequenceDiagram
   participant DMS
   participant API as DMS-API
   participant ERP
-  participant WF as Freigabe
   DMS->>API: GET /bookkeepings, /creditors, /accounts ... (changed_since)
   DMS->>+API: POST /documents (Datei bereitstellen)
   API-->>-DMS: { id: "..." }   (= fileId)
   DMS->>+API: POST /invoices { invoice: { bookkeepingid, fileId, ... } }
   API->>API: Rechnung validieren
-  API->>WF: Rechnung in Freigabeprozess anlegen
+  API->>ERP: Rechnung anlegen
   API-->>-DMS: 201 { Rechnung inkl. Status }
 ```
 

@@ -73,5 +73,5 @@ sequenceDiagram
   `appliance`, `tenant`, `tenancy`.
 - `type` (gültige Werte): `invoice`, `credit`, `correspondence`, `assurance`.
 - `storageTargets` (gültige Werte): `DMS`, `ERP`.
-- Für Rechnungen mit Freigabeprozess verwenden Sie stattdessen
+- Für Kreditorenrechnungen verwenden Sie stattdessen
   [Rechnung importieren](2-rechnung-importieren.md).

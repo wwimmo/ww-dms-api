@@ -75,9 +75,8 @@ Werden vom Rechnungsimport genutzt. Am Endpunkt hängen sie an der **Buchhaltung
 | **Konto-Kostenstelle** (AccountCostCenter) | Zuweisung von Konten zu Kostenstellen. |
 | **Buchungshistorie** (AccountingHistory) | Kontierungshistorie (frühere Buchungszeilen). |
 | **MWST-Code** (VatCode) | Mehrwertsteuercode. |
-| **Rechnung** (Invoice) | Rechnung oder Gutschrift, die in den Freigabeprozess läuft. |
+| **Rechnung** (Invoice) | Kreditorenrechnung oder Gutschrift. |
 | **Kontierung** (Accounting) | Buchungszeile zu einer Rechnung. |
-| **Visumspfad** (RealestateVisa) | Freigabe-/Visumspfad je Liegenschaft. Rollen: 1 = Visum 1, 2 = Visum 2, 3 = Visum 3. |
 
 Diese Entitäten sind in der [OpenAPI-Spezifikation](../../openapi/README.md) als `GET`-Endpunkte
 abgebildet (paginiert, mit `changed_since` + `changed_until`); `creditors`, `accounts` und `invoices`
@@ -85,15 +84,14 @@ bieten zusätzlich `POST`. Feldtypen und die genauen Schemas stehen in der Spezi
 
 ## Personen, Benutzer & Rollen
 
-Wer mit Liegenschaften und dem Freigabeprozess zu tun hat. Alle als paginierte `GET`-Endpunkte.
+Wer mit Liegenschaften zu tun hat. Alle als paginierte `GET`-Endpunkte.
 
 | Entität | Bedeutung |
 | --- | --- |
 | **Person** (Person) | Natürliche/juristische Person; Kontakt-Wurzel hinter Mietern, Kreditoren usw. Adressfelder spiegeln die jüngste Adresse. |
-| **Benutzer** (User) | ERP-Benutzer; Basis für Visa- und Workflow-Zuweisungen. |
+| **Benutzer** (User) | ERP-Benutzer. |
 | **Liegenschaftsperson** (RealestatePerson) | Person ↔ Liegenschaft mit Rolle. |
 | **Liegenschafts-Benutzer** (RealestateUser) | Benutzer ↔ Liegenschaft mit Rolle. Rollen: 10 = Bewirtschafter (Manager), 11 = Buchhalter (Accountant). |
-| **Liegenschafts-Visum** (RealestateVisa) | Person ↔ Liegenschaft als Visumsstufe. Rollen: 1 = Visum 1, 2 = Visum 2, 3 = Visum 3. |
 | **Mietverhältnisperson** (TenancyPerson) | Person ↔ Mietverhältnis mit Rolle. |
 
 ## Aufträge
