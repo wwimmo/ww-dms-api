@@ -10,7 +10,8 @@ generiert.
 ## Anzeigen
 
 - **Online (Swagger UI):** <https://wwimmo.github.io/ww-dms-api/> – wird per GitHub Pages aus dieser
-  Spezifikation veröffentlicht (siehe `.github/workflows/pages.yml`).
+  Spezifikation veröffentlicht (siehe `.github/workflows/pages.yml`), **sobald das Repository öffentlich
+  und Pages aktiviert ist**.
 - In VS Code mit einer OpenAPI-/Swagger-Vorschau-Erweiterung.
 - Lokal als HTML, z. B. `npx @redocly/cli preview-docs openapi/dms-api.v1.yaml`.
 

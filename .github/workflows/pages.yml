@@ -1,15 +1,21 @@
 name: Pages
 
 # Veröffentlicht die OpenAPI-Referenz (Swagger UI) auf GitHub Pages.
-# Voraussetzung: In den Repo-Einstellungen unter Settings → Pages die Quelle
-# "GitHub Actions" auswählen.
+# Voraussetzung: GitHub Pages aktiviert (Settings → Pages → Source "GitHub Actions").
+# Pages braucht ein öffentliches Repo bzw. einen Team/Enterprise-Plan.
+#
+# Solange Pages noch nicht aktiv ist, läuft dieser Workflow NUR manuell
+# (workflow_dispatch), damit auf `main` keine fehlschlagenden Deploys entstehen.
+# Sobald das Repo öffentlich ist und Pages aktiviert wurde, den Push-Trigger
+# wieder einkommentieren:
+#
+#   push:
+#     branches: [main]
+#     paths:
+#       - openapi/**
+#       - .github/workflows/pages.yml
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - openapi/**
-      - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
