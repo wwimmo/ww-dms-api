@@ -16,10 +16,6 @@ Fachliche und Validierungsfehler werden als `application/problem+json` zurückge
 }
 ```
 
-> Das Problem-Format ist heute noch **nicht** als eigenes Schema in der
-> [OpenAPI-Spezifikation](../../openapi/README.md) hinterlegt – dort sind je Endpunkt nur die möglichen
-> Statuscodes deklariert. Das Body-Format ist hier verbindlich beschrieben.
-
 Zwei Sonderfälle weichen vom Problem-Format ab und liefern ein einfacheres JSON-Objekt:
 
 - **`429 Too Many Requests`** (Rate-Limit): `{ "error": "...", "message": "...", "retryAfter": <sek> }`.
