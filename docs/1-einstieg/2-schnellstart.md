@@ -10,13 +10,12 @@ Am Ende haben Sie ein Token angefordert, nach Dokumenten abgefragt und den Inhal
 ## 0. Voraussetzungen
 
 - Eine `client_id` und ein `client_secret` (werden Ihnen bereitgestellt).
-- Die Basis-URL der Zielumgebung: Produktion `https://erp.wwimmo.ch`, Test `https://erp-test.wwimmo.ch`,
-  Entwicklung `https://erp-dev.wwimmo.ch`.
+- Die Basis-URL der Zielumgebung: Test `https://erp-test.wwimmo.ch` oder Produktion `https://erp.wwimmo.ch`.
 
-Platzhalter setzen (hier: Entwicklung):
+Platzhalter setzen (hier: Test):
 
 ```bash
-BASE_URL="https://erp-dev.wwimmo.ch/api/v1/dms"
+BASE_URL="https://erp-test.wwimmo.ch/api/v1/dms"
 CLIENT_ID="<ihre-client-id>"
 CLIENT_SECRET="<ihr-client-secret>"
 ```

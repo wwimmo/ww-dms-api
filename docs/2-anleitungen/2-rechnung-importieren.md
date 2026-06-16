@@ -31,30 +31,9 @@ ist der Dokumentimport plus die Rechnungsverarbeitung.
    validiert sie und übergibt sie dem Freigabeprozess. Die Antwort enthält die angelegte Rechnung inkl.
    Status; bei Validierungsfehlern antwortet die API mit `400` und Details.
 
-   ```
-   POST /invoices
-   Content-Type: application/json
-
-   {
-     "invoices": [
-       {
-         "invoice": {
-           "invoicenumber": "2026-00042",
-           "type": 1,
-           "date": "2026-01-15T00:00:00Z",
-           "amount": 1234.55,
-           "bookkeepingid": "<buchhaltung-uuid>",
-           "fileId": "<dokument-uuid>",
-           "creditor": { "name1": "EKZ AG" },
-           "paymentinfo": { "iban": "CH..", "reference": "..." },
-           "accountings": [
-             { "accountid": "<konto-uuid>", "amount": 1234.55, "vatcodeid": "<mwst-uuid>" }
-           ]
-         }
-       }
-     ]
-   }
-   ```
+   Den genauen Request-Aufbau (`InvoiceUploadRequest` mit `bookkeepingid`-Anker, `fileId`-Bezug,
+   `creditor`, `paymentinfo`, `accountings`) finden Sie in der
+   [OpenAPI-Spezifikation](../../openapi/README.md) — dort bleibt er stets aktuell.
 
    Eine fälschlich übergebene Rechnung lässt sich mit `DELETE /invoices/{id}` entfernen – solange sie
    noch nicht verbucht ist (sonst `409 Conflict`).

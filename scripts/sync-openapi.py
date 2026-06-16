@@ -21,9 +21,8 @@ import yaml
 
 # Fester servers-Block. Die Basis-URLs sind je Umgebung; der Generator liefert keine servers.
 SERVERS = [
-    {"url": "https://erp.wwimmo.ch", "description": "Produktion"},
     {"url": "https://erp-test.wwimmo.ch", "description": "Test"},
-    {"url": "https://erp-dev.wwimmo.ch", "description": "Entwicklung"},
+    {"url": "https://erp.wwimmo.ch", "description": "Produktion"},
 ]
 
 

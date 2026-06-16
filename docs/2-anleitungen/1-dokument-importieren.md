@@ -46,8 +46,8 @@ E-Rechnung.
    PUT /documents/{id}
    ```
 
-   Ein nicht mehr benötigtes Dokument lässt sich mit `DELETE /documents/{id}` endgültig entfernen
-   (Antwort `204`).
+   Ein nicht mehr benötigtes Dokument lässt sich mit `DELETE /documents/{id}` löschen (Soft-Delete,
+   Antwort `204`).
 
 ## Ablauf
 

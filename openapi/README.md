@@ -40,8 +40,8 @@ generiert.
 - **Fehler-Body als eigenes Schema.** Fehler werden heute über Statuscodes beschrieben; das
   Antwortformat ist in [Fehlerbehandlung](../docs/3-referenz/3-fehler.md) dokumentiert, aber noch nicht
   als `Problem`-Schema in der Spezifikation hinterlegt.
-- **Löschungen / Aufbewahrung.** Heute löschen `DELETE`-Endpunkte hart (204). Eine Tombstone-Semantik
-  (`deleted_at`, Aufbewahrungsfrist) für lückenfreies Polling ist noch nicht festgelegt – siehe
+- **Löschungen / Aufbewahrung.** `DELETE` ist als Soft-Delete umgesetzt (204). Wie gelöschte Datensätze
+  über das Polling sichtbar werden (Markierung, Aufbewahrung), wird derzeit erarbeitet – siehe
   [Konventionen](../docs/3-referenz/2-konventionen.md#löschungen).
 
 > `enum`-Werte einzelner String-Felder (z. B. Dokument-`type`, Verknüpfungs-`entity-type`,

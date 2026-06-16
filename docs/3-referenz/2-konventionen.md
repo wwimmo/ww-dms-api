@@ -32,16 +32,12 @@ Logik ohne Dedup-Schlüssel.
 
 ## Löschungen
 
-Schreibende Endpunkte mit `DELETE` (z. B. `DELETE /documents/{uuid}`, `DELETE /invoices/{uuid}`) löschen
-den Datensatz **endgültig** und antworten mit `204 No Content`. Es gibt heute **keine** Tombstone-Markierung
-und kein `deleted_at`-Feld.
+`DELETE`-Endpunkte (z. B. `DELETE /documents/{uuid}`, `DELETE /invoices/{uuid}`) antworten mit
+`204 No Content`. Löschungen sind als **Soft-Delete** umgesetzt: der Datensatz wird als gelöscht
+markiert, nicht physisch entfernt.
 
-Konsequenz fürs Polling: Eine Löschung wird über die Listen-Endpunkte derzeit nicht aktiv signalisiert –
-ein gelöschter Datensatz verschwindet schlicht. Wenn Sie Löschungen sicher erkennen müssen, gleichen Sie
-periodisch den vollständigen Bestand ab.
-
-> Eine Tombstone-Semantik (sichtbar gehaltene Löschungen mit Aufbewahrungsfrist) für lückenfreies Polling
-> ist vorgesehen, aber noch nicht festgelegt. Sie wird hier ergänzt, sobald sie im Vertrag steht.
+> Wie gelöschte Datensätze über das Polling sichtbar gemacht werden (Markierung, Aufbewahrung), wird
+> derzeit erarbeitet und hier ergänzt, sobald es feststeht.
 
 ## Paginierung
 

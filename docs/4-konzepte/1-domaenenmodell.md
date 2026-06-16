@@ -119,10 +119,10 @@ Ein **Dokument** (`DocumentEntity`) ist „eine lesbare Datei". Wichtige Felder:
 Import:      im DMS erstellt → Metadaten an ERP (POST) → im E-Dossier verlinkt
 Archivierung: im ERP erstellt → vom DMS geholt → im DMS archiviert
               → dmsReference zurückgeschrieben (PUT) → optional aus ERP entfernt
-Löschung:    DELETE /documents/{uuid} → endgültige Löschung (204)
+Löschung:    DELETE /documents/{uuid} → Soft-Delete (204)
 ```
 
-> Löschen wird über `DELETE` unterstützt und ist **endgültig** (keine Tombstones, siehe
+> Löschen wird über `DELETE` als **Soft-Delete** umgesetzt (siehe
 > [Konventionen](../3-referenz/2-konventionen.md#löschungen)). Ob Dokumente einen expliziten Status tragen
 > und ob Ersetzen/Versionierung unterstützt wird, ist noch offen und wird ergänzt.
 

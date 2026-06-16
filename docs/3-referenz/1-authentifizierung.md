@@ -51,9 +51,8 @@ Authorization: Bearer <token>
 
 | Umgebung | Basis-URL |
 | --- | --- |
-| Produktion | `https://erp.wwimmo.ch` |
 | Test | `https://erp-test.wwimmo.ch` |
-| Entwicklung | `https://erp-dev.wwimmo.ch` |
+| Produktion | `https://erp.wwimmo.ch` |
 
 Alle Pfade beginnen mit `/api/v1/dms`, z. B. `https://erp.wwimmo.ch/api/v1/dms/token`.
 
