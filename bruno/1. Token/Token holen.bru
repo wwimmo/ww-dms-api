@@ -1,0 +1,31 @@
+meta {
+  name: Token holen
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/token
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "client_id": "{{clientId}}",
+    "client_secret": "{{clientSecret}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("token", res.body.token);
+  }
+}
+
+docs {
+  Tauscht client_id und client_secret gegen ein Zugriffstoken (OAuth 2.0 Client
+  Credentials, Scope wwimmo:dms:api) und speichert es als {{token}} für alle weiteren
+  Anfragen. Tragen Sie zuerst baseUrl, clientId und clientSecret in der Umgebung ein.
+  Begrenzt auf 30 Anfragen/Minute pro IP. Diese Anfrage zuerst ausführen.
+}

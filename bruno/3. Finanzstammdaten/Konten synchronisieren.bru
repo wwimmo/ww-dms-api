@@ -1,0 +1,25 @@
+meta {
+  name: Konten synchronisieren
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/accounts?changed_since={{lastSyncTime}}&changed_until=2030-01-01T00:00:00Z
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+script:pre-request {
+  if (!bru.getVar("lastSyncTime")) {
+    bru.setVar("lastSyncTime", "2020-01-01T00:00:00Z");
+  }
+}
+
+docs {
+  Delta-Abruf der Konten.
+}

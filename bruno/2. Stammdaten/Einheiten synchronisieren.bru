@@ -1,0 +1,25 @@
+meta {
+  name: Einheiten synchronisieren
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/units?changed_since={{lastSyncTime}}&changed_until=2030-01-01T00:00:00Z
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+script:pre-request {
+  if (!bru.getVar("lastSyncTime")) {
+    bru.setVar("lastSyncTime", "2020-01-01T00:00:00Z");
+  }
+}
+
+docs {
+  Delta-Abruf der Einheiten (Objekte).
+}

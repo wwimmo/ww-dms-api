@@ -1,0 +1,31 @@
+meta {
+  name: Mietverhaeltnisse synchronisieren
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/tenancies?changed_since={{lastSyncTime}}&changed_until=2030-01-01T00:00:00Z
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+script:pre-request {
+  if (!bru.getVar("lastSyncTime")) {
+    bru.setVar("lastSyncTime", "2020-01-01T00:00:00Z");
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.items && res.body.items.length > 0) {
+    bru.setVar("tenancyId", res.body.items[0].id);
+  }
+}
+
+docs {
+  Delta-Abruf der Mietverhältnisse. Erste ID wird als {{tenancyId}} gespeichert.
+}

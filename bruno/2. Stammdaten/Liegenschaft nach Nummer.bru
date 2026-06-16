@@ -1,0 +1,19 @@
+meta {
+  name: Liegenschaft nach Nummer
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/realestates/number:{{realestateNumber}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Einzelne Liegenschaft per ERP-Nummer. {{realestateNumber}} in der Umgebung oder als Variable setzen.
+}
