@@ -18,7 +18,7 @@ läuft.
 
 Die **Buchhaltung** kennt drei Ausprägungen, die implizit über die gesetzten Fremdschlüssel erkennbar
 sind: *Portfolio-Modus* (`portfolioid` gesetzt), *Liegenschafts-Modus* (`realestateid` gesetzt) und
-*Standalone* (beide leer).
+*Standalone* (beide leer). Für ImmoTop2 kommt nur der Portfolio-Modus zum Tragen. 
 
 ## Stammdaten
 
