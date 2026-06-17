@@ -32,23 +32,52 @@ Logik ohne Dedup-Schlüssel.
 
 ## Löschungen
 
-Eine harte Löschung wäre für ein abrufendes System unsichtbar. Daher werden Löschungen über **Tombstones**
-abgebildet: Ein gelöschter Datensatz bleibt mit einer Lösch-Markierung in den Antworten sichtbar, bis eine
-Aufbewahrungsfrist abläuft – lange genug, dass auch ein System mit mehrwöchiger Polling-Lücke die Löschung
-mitbekommt.
+`DELETE`-Endpunkte (z. B. `DELETE /documents/{uuid}`, `DELETE /invoices/{uuid}`) antworten mit
+`204 No Content`. Löschungen sind als **Soft-Delete** umgesetzt: der Datensatz wird als gelöscht
+markiert, nicht physisch entfernt.
 
-> Die konkreten Felder (`deleted_at`) und die Aufbewahrungsfrist werden noch festgelegt und ergänzt. Bis
-> dahin gilt: Verschwinden ≠ Löschung.
+> Wie gelöschte Datensätze über das Polling sichtbar gemacht werden (Markierung, Aufbewahrung), wird
+> derzeit erarbeitet und hier ergänzt, sobald es feststeht.
 
 ## Paginierung
 
-> Wird noch festgelegt (Seitengrösse, Cursor/Offset, Antwort-Hülle) und hier ergänzt. Prüfen Sie dies vor
-> der Anbindung grosser Datenmengen.
+Listen-Endpunkte für Stammdaten und Buchhaltung sind seitenweise abrufbar:
+
+- Query-Parameter: `page` (Standard `1`) und `page_size` (Standard `100`, Maximum `1000`).
+- Die Antwort ist eine Hülle:
+
+  ```json
+  {
+    "items": [ /* … */ ],
+    "totalCount": 1234,
+    "pageCount": 13,
+    "page": 1,
+    "pageSize": 100
+  }
+  ```
+
+- Zusätzlich wird ein `Link`-Header (RFC 5988) mit den Relationen `first`, `last`, `prev`, `next`
+  geliefert. Folgen Sie `next`, bis kein `next` mehr vorhanden ist.
 
 ## Rate-Limits
 
-Der Token-Endpunkt ist auf **30 Anfragen/Minute pro IP** begrenzt. Auch Daten-Endpunkte sind
-rate-limitiert; die genauen Grenzen und die `429`-Header werden ergänzt.
+Alle Endpunkte sind rate-limitiert (Konfiguration über `RateLimiting:Dms`):
+
+| Bereich | Verfahren | Standard-Grenze |
+| --- | --- | --- |
+| Anonyme Endpunkte (`/token`, `/health`) | Fixed Window pro IP | 30 Anfragen/Minute |
+| Authentifizierte Daten-Endpunkte | Token-Bucket pro Client | 100 Burst, 50 Anfragen/Minute |
+
+Antworten tragen die Header `X-RateLimit-Limit`, `X-RateLimit-Remaining` und `X-RateLimit-Reset`
+(Unix-Zeitstempel). Bei Überschreitung antwortet die API mit `429 Too Many Requests` und einem
+`Retry-After`-Header (Sekunden). Empfohlen: exponentielles Backoff mit Jitter (siehe
+[Fehlerbehandlung](3-fehler.md)).
+
+## Bedingte Abfragen (ETag)
+
+Einzel-GETs einiger Stammdaten (z. B. `GET /realestates/{uuid}`, `GET /portfolios/{uuid}`,
+`GET /bookkeepings/{uuid}`) liefern einen `ETag`-Header. Senden Sie ihn bei der nächsten Abfrage als
+`If-None-Match` mit; bei unveränderten Daten antwortet die API mit `304 Not Modified` (ohne Body).
 
 ## Bezeichner & sprechende Schlüssel
 
@@ -66,4 +95,5 @@ rate-limitiert; die genauen Grenzen und die `429`-Header werden ergänzt.
 
 ## Fehler
 
-Alle Fehler verwenden einen Problem+JSON-Body – siehe [Fehlerbehandlung](3-fehler.md).
+Fachliche und Validierungsfehler verwenden einen Problem+JSON-Body (mit Ausnahmen bei `429` und am
+Token-Endpunkt) – siehe [Fehlerbehandlung](3-fehler.md).

@@ -1,0 +1,52 @@
+name: Sync OpenAPI
+
+# Zieht die OpenAPI-Spec aus der Dev-Instanz, normalisiert sie und öffnet bei Änderung
+# einen PR. Mensch bleibt über den PR-Review in der Schleife (kein Auto-Merge).
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # täglich 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  # Quelle der generierten Spec. Bei Bedarf als Repo-Variable überschreiben.
+  SOURCE_URL: https://polaris.wwportal-dev.ch/swagger/v1/swagger.json
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Abhängigkeiten
+        run: pip install pyyaml
+
+      - name: Spec aktualisieren
+        run: python scripts/sync-openapi.py "$SOURCE_URL" openapi/dms-api.v1.yaml
+
+      - name: OpenAPI validieren
+        run: npx --yes @redocly/cli@latest lint openapi/dms-api.v1.yaml
+
+      - name: PR bei Änderung öffnen
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/sync-openapi
+          title: 'chore(openapi): spec mit dev-stand synchronisieren'
+          commit-message: 'chore(openapi): spec mit dev-stand synchronisieren'
+          body: |
+            Automatischer Sync der OpenAPI-Spec aus der Dev-Instanz (`SOURCE_URL`).
+
+            Bitte den Diff prüfen, bevor gemergt wird – die Dev-Instanz kann dem
+            Prod-Stand voraus sein. Nach dem Merge published der Pages-Workflow die
+            aktualisierte Referenz automatisch neu.
+          labels: |
+            openapi
+            automated

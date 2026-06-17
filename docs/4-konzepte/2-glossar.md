@@ -21,10 +21,11 @@ Bezeichnern in der API.
 | Konto | Account | Ein Buchhaltungskonto. |
 | Kostenstelle | CostCenter | Kostenstelle (nur ImmoTop2). |
 | MWST-Code | VatCode | Mehrwertsteuercode. |
-| Rechnung | Invoice | Rechnung oder Gutschrift, die in den Freigabeprozess läuft. |
+| Rechnung | Invoice | Kreditorenrechnung oder Gutschrift. |
 | Gutschrift | Credit | Eine Gutschrift; ein Wert des Dokument-`type`. |
 | Kontierung | Accounting | Buchungszeile zu einer Rechnung. |
-| Visum / Visumspfad | RealestateVisa | Freigabeschritt / Freigabepfad im Rechnungsprozess. |
+| Benutzer | User | ERP-Benutzer. |
+| Auftrag | Order | Arbeitsauftrag aus dem Portal (mit Status und mehrsprachigen Texten). |
 | E-Dossier | E-Dossier | Die elektronische Dokumentenakte des ERP je Objekt, in der Dokumente verlinkt werden. |
 | Stammdaten | Master data | Stabile, langlebige Bezugsdaten (die Objekte, an die Dokumente hängen). |
 | DMS | DMS | Das Dokumentenmanagement-System des Anbieters. |

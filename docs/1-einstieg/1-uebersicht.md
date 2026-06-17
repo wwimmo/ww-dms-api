@@ -21,7 +21,7 @@ Alles, was die API tut, dient einem dieser drei Abläufe:
 | Ablauf | Richtung | Was übertragen wird | Beispiel |
 | --- | --- | --- | --- |
 | **Dokument importieren** | DMS → ERP | Dokument liegt zuerst im DMS; die Metadaten (ohne Dateiinhalt) gehen ans ERP, das sie im E-Dossier verlinkt. | Eingescannte Kreditorenrechnungen/-gutschriften, E-Rechnungen. |
-| **Rechnung importieren** | DMS → ERP → Freigabe | Wie ein Dokumentimport, zusätzlich verarbeitet das ERP die Rechnung im Freigabeprozess. | Lieferantenrechnung mit Visumspflicht. |
+| **Rechnung importieren** | DMS → ERP | Wie ein Dokumentimport, zusätzlich wird die im DMS freigegebene Rechnung ins ERP zur Verbuchung importiert. | Lieferantenrechnung (Kreditorenbeleg). |
 | **Dokument archivieren** | ERP → DMS | Dokument entsteht im ERP; das DMS holt Metadaten und Datei, archiviert sie und meldet den Erfolg zurück. | Buchungsbelege zu manuellen Buchungen, Mahnbriefe aus dem Mahnlauf. |
 
 > Öffnen, Anzeigen und Publizieren von Dokumenten im Portal funktioniert wie bisher und ist **nicht Teil**
@@ -36,8 +36,8 @@ Sie konsumieren die API ausschliesslich durch **Abrufen** – typischerweise
 [Konventionen](../3-referenz/2-konventionen.md) beschrieben sind:
 
 - Jede Änderung trägt einen Zeitstempel, damit `changed_since` sie findet.
-- Löschungen werden über Tombstones erkennbar gemacht (ein gelöschter Datensatz bleibt eine Zeit lang mit
-  Lösch-Markierung sichtbar).
+- Löschungen sind als Soft-Delete umgesetzt; wie sie über das Polling sichtbar werden, wird derzeit
+  erarbeitet – siehe [Konventionen](../3-referenz/2-konventionen.md#löschungen).
 - Aufrufe sind idempotent – ein wiederholter Abruf verarbeitet nichts doppelt.
 
 ## Das Domänenmodell

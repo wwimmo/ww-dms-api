@@ -1,7 +1,7 @@
 # Schnellstart
 
-> Der kürzeste Weg von null zu „die API antwortet". *Dieser Leitfaden wird noch vervollständigt, sobald
-> die Basis-URL je Umgebung und das Verfahren zur Ausgabe der Zugangsdaten feststehen.*
+> Der kürzeste Weg von null zu „die API antwortet". *Das Verfahren zur Ausgabe der Zugangsdaten
+> (`client_id`/`client_secret`) wird noch ergänzt.*
 
 ## Ziel
 
@@ -10,12 +10,12 @@ Am Ende haben Sie ein Token angefordert, nach Dokumenten abgefragt und den Inhal
 ## 0. Voraussetzungen
 
 - Eine `client_id` und ein `client_secret` (werden Ihnen bereitgestellt).
-- Die Basis-URL der Zielumgebung.
+- Die Basis-URL der Test-Umgebung: `https://erp-test.wwimmo.ch` (die Produktions-URL erhalten Sie beim Onboarding).
 
-Platzhalter setzen:
+Platzhalter setzen (hier: Test):
 
 ```bash
-BASE_URL="https://<umgebung>/api/v1/dms"
+BASE_URL="https://erp-test.wwimmo.ch/api/v1/dms"
 CLIENT_ID="<ihre-client-id>"
 CLIENT_SECRET="<ihr-client-secret>"
 ```
@@ -24,11 +24,9 @@ CLIENT_SECRET="<ihr-client-secret>"
 
 ```bash
 curl -s -X POST "$BASE_URL/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials" \
-  -d "client_id=$CLIENT_ID" \
-  -d "client_secret=$CLIENT_SECRET"
-# → { "access_token": "...", "token_type": "Bearer", "expires_in": ... }
+  -H "Content-Type: application/json" \
+  -d "{\"client_id\":\"$CLIENT_ID\",\"client_secret\":\"$CLIENT_SECRET\"}"
+# → { "token": "...", "tokenType": "Bearer", "expiresIn": 3600, "expiresAt": "..." }
 ```
 
 Token zwischenspeichern und wiederverwenden – der Token-Endpunkt ist auf 30 Anfragen/Minute begrenzt.
@@ -37,7 +35,7 @@ Siehe [Authentifizierung](../3-referenz/1-authentifizierung.md).
 ## 2. Dokumente abfragen
 
 ```bash
-TOKEN="<access_token aus Schritt 1>"
+TOKEN="<token aus Schritt 1>"
 curl -s "$BASE_URL/documents?changed_since=2026-01-01T00:00:00Z" \
   -H "Authorization: Bearer $TOKEN"
 ```

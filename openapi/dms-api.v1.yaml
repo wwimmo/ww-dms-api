@@ -1,0 +1,5631 @@
+openapi: 3.0.1
+info:
+  title: DMS API
+  description: |-
+    REST API for the Document Management System (DMS).
+
+    ## Rate Limiting
+
+    All DMS endpoints are rate-limited. Two policies apply depending on authentication:
+
+    | Policy | Algorithm | Default Limit | Queue |
+    |--------|-----------|---------------|-------|
+    | Anonymous (e.g. /token, /health) | Fixed Window | 30 req/min per IP | 2 |
+    | Authenticated (data endpoints) | Token Bucket | 100 burst, 50 req/min per client | 5 |
+
+    When rate-limited, the API returns **HTTP 429** with a `Retry-After` header (seconds).
+    Limits are configurable via the `RateLimiting:Dms` configuration section.
+
+    ## Retry Strategy
+
+    Consumers **should** implement exponential backoff with jitter:
+    1. Wait for `Retry-After` seconds (or 1s if absent).
+    2. On repeated 429s, double the delay: 1s → 2s → 4s → 8s.
+    3. Add ±25% random jitter to avoid thundering-herd effects.
+    4. Abort after 5 retries (~30s total).
+  version: v1
+servers:
+- url: https://erp-test.wwimmo.ch
+  description: Test
+paths:
+  /api/v1/dms/health:
+    get:
+      tags:
+      - DMS
+      summary: Get DMS service health status
+      description: |-
+        Returns the current health status of the Document Management System service.
+        Checks real dependencies (database). Returns 503 if any dependency is unhealthy.
+        This endpoint is publicly accessible for health monitoring.
+      operationId: GetDmsHealth
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 30
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service Unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 30 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/info:
+    get:
+      tags:
+      - DMS
+      summary: Get DMS service info (authenticated)
+      description: |-
+        Returns service information including caller identity.
+        Requires a valid JWT token (user or M2M).
+      operationId: GetDmsInfo
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InfoResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Void'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Void'
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Void'
+  /api/v1/dms/token:
+    post:
+      tags:
+      - DMS
+      summary: Exchange client credentials for an access token
+      description: |-
+        Proxies an OAuth2 client_credentials grant to the Cidaas OIDC provider.
+        Send your client_id and client_secret to receive a JWT access token
+        for DMS API access. The token will contain the required scope and
+        customerid claim for accessing DMS data endpoints.
+      operationId: ExchangeClientCredentials
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientCredentialsTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 30
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Unauthorized
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 30 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+        '502':
+          description: Bad Gateway
+  /api/v1/dms/realestates:
+    get:
+      tags:
+      - DMS
+      summary: Get all realestates
+      description: |-
+        Returns all realestates updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetRealestates
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealestateResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/realestates/{uuid}:
+    get:
+      tags:
+      - DMS
+      summary: Get a realestate by UUID
+      description: Returns an individual realestate by its system-assigned UUID. Supports ETag-based conditional
+        requests via If-None-Match header.
+      operationId: GetRealestateByUuid
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealestateResponse'
+        '304':
+          description: Not Modified
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/realestates/number:{number}:
+    get:
+      tags:
+      - DMS
+      summary: Get a realestate by number
+      description: Returns an individual realestate by its human-readable number. Supports ETag-based
+        conditional requests via If-None-Match header.
+      operationId: GetRealestateByNumber
+      parameters:
+      - name: number
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealestateResponse'
+        '304':
+          description: Not Modified
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/portfolios:
+    get:
+      tags:
+      - DMS
+      summary: Get all portfolios
+      description: |-
+        Returns all portfolios updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetPortfolios
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/portfolios/{uuid}:
+    get:
+      tags:
+      - DMS
+      summary: Get a portfolio by UUID
+      description: Returns an individual portfolio by its system-assigned UUID. Supports ETag-based conditional
+        requests via If-None-Match header.
+      operationId: GetPortfolioByUuid
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioResponse'
+        '304':
+          description: Not Modified
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/houses:
+    get:
+      tags:
+      - DMS
+      summary: Get all houses
+      description: |-
+        Returns all houses updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetHouses
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/units:
+    get:
+      tags:
+      - DMS
+      summary: Get all rental units
+      description: |-
+        Returns all rental units updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetUnits
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/appliances:
+    get:
+      tags:
+      - DMS
+      summary: Get all appliances
+      description: |-
+        Returns all appliances updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetAppliances
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplianceResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/tenants:
+    get:
+      tags:
+      - DMS
+      summary: Get all tenants
+      description: |-
+        Returns all tenants updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetTenants
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/tenancies:
+    get:
+      tags:
+      - DMS
+      summary: Get all tenancies
+      description: |-
+        Returns all tenancies updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetTenancies
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenancyResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/tenancies/{uuid}:
+    get:
+      tags:
+      - DMS
+      summary: Get a tenancy by UUID
+      description: Returns an individual tenancy by its system-assigned UUID.
+      operationId: GetTenancyByUuid
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenancyResponse'
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/bookkeepings:
+    get:
+      tags:
+      - DMS
+      summary: Get all bookkeeping units
+      description: |-
+        Returns all bookkeeping units updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+
+        Three modes are encoded implicitly via FK presence: Portfolio-mode
+        (portfolioid set), RealEstate-mode (realestateid set), Standalone (both null).
+      operationId: GetBookkeepings
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookkeepingResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/bookkeepings/{uuid}:
+    get:
+      tags:
+      - DMS
+      summary: Get a bookkeeping unit by UUID
+      description: Returns an individual bookkeeping unit by its system-assigned UUID. Supports ETag-based
+        conditional requests via If-None-Match header.
+      operationId: GetBookkeepingByUuid
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookkeepingResponse'
+        '304':
+          description: Not Modified
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/payoutbankaccountbookkeepings:
+    get:
+      tags:
+      - DMS
+      summary: Get all payout-account-to-bookkeeping links
+      description: |-
+        Returns links between payout accounts and bookkeeping units updated within
+        the specified time range. Both changed_since and changed_until are required
+        for delta synchronization. Optional filters: payoutbankaccountid, bookkeepingid.
+
+        The per-link `default` flag indicates whether the linked payout account is
+        the default for the linked bookkeeping. The same payout account can be the
+        default for one bookkeeping and not another.
+      operationId: GetPayoutBankAccountBookkeepings
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: payoutbankaccountid
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: bookkeepingid
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBankAccountBookkeepingResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/documents:
+    get:
+      tags:
+      - DMS
+      summary: Get all documents from the ERP
+      description: |-
+        Returns all documents updated since the specified timestamp.
+        Optionally filter to only documents that require DMS archiving.
+      operationId: GetDocuments
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+    post:
+      tags:
+      - DMS
+      summary: Create a new ERP document
+      description: Creates a new document in the ERP. Returns the created document with its assigned ID.
+      operationId: CreateDocument
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/documents/{uuid}:
+    get:
+      tags:
+      - DMS
+      summary: Get an individual ERP document by ID
+      description: Returns a single ERP document identified by its UUID.
+      operationId: GetDocumentByUuid
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+    put:
+      tags:
+      - DMS
+      summary: Update an individual ERP document
+      description: |-
+        Updates an existing document, e.g. a new name, additional links,
+        or DMS reference once archived.
+      operationId: UpdateDocument
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '404':
+          description: Not Found
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+    delete:
+      tags:
+      - DMS
+      summary: Delete a document
+      description: Deletes a document from the ERP, including its metadata and binary content.
+      operationId: DeleteDocument
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No Content
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/documents/{uuid}/content:
+    get:
+      tags:
+      - DMS
+      summary: Get document content
+      description: Returns the binary content of an ERP document, or a redirect if stored on a CDN.
+      operationId: GetDocumentContent
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+        '302':
+          description: Found
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/creditors:
+    get:
+      tags:
+      - DMS
+      summary: Get all creditors from the ERP
+      description: Returns all creditors known to the ERP.
+      operationId: GetCreditors
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditorResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+    post:
+      tags:
+      - DMS
+      summary: Create a new creditor in the ERP
+      description: Creates a new creditor in the ERP. Returns the created creditor with its assigned ID.
+      operationId: CreateCreditor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditorRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/creditors/{uuid}:
+    get:
+      tags:
+      - DMS
+      summary: Get an individual creditor by ID
+      description: Returns a single creditor identified by its UUID.
+      operationId: GetCreditorByUuid
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditorResponse'
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/accounts:
+    get:
+      tags:
+      - DMS
+      summary: Get all accounts from the ERP
+      description: Returns all accounts (Konten/Zahlstellen) known to the ERP.
+      operationId: GetAccounts
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+    post:
+      tags:
+      - DMS
+      summary: Create a new account in the ERP
+      description: Creates a new account (Konto/Zahlstelle) in the ERP. Returns the created account with
+        its assigned ID.
+      operationId: CreateAccount
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/payment-accounts:
+    get:
+      tags:
+      - DMS
+      summary: Get all payment accounts from the ERP
+      description: Returns all payment accounts (Zahlverbindungen) linked to creditors.
+      operationId: GetPaymentAccounts
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAccountResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/payoutbankaccounts:
+    get:
+      tags:
+      - DMS
+      summary: Get all payout bank accounts from the ERP
+      description: Returns all payout bank accounts (Auszahlverbindungen ohne Liegenschaftsbezug). The
+        link to bookkeepings is provided separately via /payoutbankaccountbookkeepings (wiki 2476).
+      operationId: GetPayoutBankAccounts
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBankAccountResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/cost-centers:
+    get:
+      tags:
+      - DMS
+      summary: Get all cost centers from the ERP
+      description: Returns all cost centers (Kostenstellen) known to the ERP.
+      operationId: GetCostCenters
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/account-cost-centers:
+    get:
+      tags:
+      - DMS
+      summary: Get all account-cost center assignments from the ERP
+      description: Returns all account-cost center assignments (Konti-Kostenstellen-Zuweisungen) known
+        to the ERP.
+      operationId: GetAccountCostCenters
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountCostCenterResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/vat-codes:
+    get:
+      tags:
+      - DMS
+      summary: Get all VAT codes from the ERP
+      description: Returns all VAT codes (MWST-Codes) known to the ERP.
+      operationId: GetVatCodes
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VatCodeResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/accountings-history:
+    get:
+      tags:
+      - DMS
+      summary: Get all accounting history entries from the ERP
+      description: Returns all accounting history entries (Kontierungshistorie) known to the ERP.
+      operationId: GetAccountingHistory
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingHistoryResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/persons:
+    get:
+      tags:
+      - DMS
+      summary: Get all persons
+      description: |-
+        Returns all persons updated within the specified time range.
+        Address fields reflect the most recent address (by validfrom) for the person.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetPersons
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/tenancy-persons:
+    get:
+      tags:
+      - DMS
+      summary: Get all tenancy persons
+      description: |-
+        Returns all tenancy persons (Mietverhältnispersonen) updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetTenancyPersons
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenancyPersonResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/realestate-persons:
+    get:
+      tags:
+      - DMS
+      summary: Get all realestate persons
+      description: |-
+        Returns all realestate persons (Liegenschaftspersonen) updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetRealestatePersons
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealestatePersonResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/realestate-users:
+    get:
+      tags:
+      - DMS
+      summary: Get realestate user role assignments
+      description: |-
+        Returns user-to-realestate role assignments updated within the specified time range.
+        Roles: 10 = Manager, 11 = Accountant.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetRealestateUsers
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealestateUserResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/realestate-visas:
+    get:
+      tags:
+      - DMS
+      summary: Get realestate visa role assignments
+      description: |-
+        Returns visa role assignments (Visum 1-3) per realestate updated within the specified time range.
+        Roles: 1 = Visum 1, 2 = Visum 2, 3 = Visum 3.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetRealestateVisas
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealestateVisaResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/orders:
+    get:
+      tags:
+      - DMS
+      summary: Get all orders
+      description: |-
+        Returns all work orders from the portal ticketing module updated within
+        the specified time range. Both changed_since and changed_until are
+        required for delta synchronization.
+      operationId: GetOrders
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/orders/{uuid}:
+    get:
+      tags:
+      - DMS
+      summary: Get a single order by UUID
+      description: Returns an individual work order by its system-assigned UUID.
+      operationId: GetOrderByUuid
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/invoices:
+    get:
+      tags:
+      - DMS
+      summary: Get all invoices
+      description: |-
+        Returns all invoices updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetInvoices
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+    post:
+      tags:
+      - DMS
+      summary: Submit an invoice to KrediFlow
+      description: Creates an invoice with document reference and triggers the visa workflow in KrediFlow.
+      operationId: CreateInvoice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceUploadRequest'
+        required: true
+      responses:
+        '201':
+          description: Created
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/invoices/{uuid}:
+    get:
+      tags:
+      - DMS
+      summary: Get a single invoice by UUID
+      description: Returns an individual invoice by its UUID, including processing status and error message.
+      operationId: GetInvoiceByUuid
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '404':
+          description: Not Found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+    delete:
+      tags:
+      - DMS
+      summary: Delete an invoice
+      description: Deletes an invoice and its document link. Returns 409 if the invoice has already been
+        booked in the ERP.
+      operationId: DeleteInvoice
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No Content
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+        '404':
+          description: Not Found
+        '409':
+          description: Conflict
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/users:
+    get:
+      tags:
+      - DMS
+      summary: Get all users
+      description: |-
+        Returns all users updated within the specified time range.
+        Both changed_since and changed_until are required for delta synchronization.
+      operationId: GetUsers
+      parameters:
+      - name: changed_since
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: changed_until
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      - name: page
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 1
+      - name: page_size
+        in: query
+        schema:
+          type: integer
+          format: int32
+          default: 100
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 100
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+            Link:
+              description: 'RFC 5988 pagination links (rel: first, last, prev, next)'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponsePaginatedResponse'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 100 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+  /api/v1/dms/dev/token:
+    post:
+      tags:
+      - DMS
+      - DMS Development
+      summary: Generate a development test token
+      description: |-
+        Generates a JWT token for testing purposes.
+        Only available in development environment. Supports both user and M2M token types.
+      operationId: GenerateDevToken
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-RateLimit-Limit:
+              description: Maximum requests allowed per 1 minute
+              schema:
+                type: integer
+              example: 30
+            X-RateLimit-Remaining:
+              description: Remaining requests in current window
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              description: Unix timestamp when the rate limit resets
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '429':
+          description: |-
+            Rate limit exceeded. Limit: 30 requests per 1 minute.
+            The response includes a Retry-After header indicating the number of seconds to wait.
+
+            **Recommended retry strategy — Exponential Backoff with Jitter:**
+            1. Wait for the duration specified in the `Retry-After` header (or 1 second if absent).
+            2. On subsequent failures, double the wait time: 1s → 2s → 4s → 8s → …
+            3. Add random jitter (±25%) to each delay to avoid thundering-herd effects.
+            4. Set a maximum of 5 retries (or ~30 seconds total wait) before aborting.
+
+            Example (pseudocode):
+            ```
+            delay = max(retryAfterHeader, 1)
+            for attempt in 1..5:
+                sleep(delay * (0.75 + random(0, 0.5)))
+                response = retry(request)
+                if response.status != 429: break
+                delay = delay * 2
+            ```
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Void'
+components:
+  schemas:
+    AccountCostCenterResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountid:
+          type: string
+          format: uuid
+        costcenterid:
+          type: string
+          format: uuid
+        validfrom:
+          type: string
+          nullable: true
+        validto:
+          type: string
+          nullable: true
+      additionalProperties: false
+    AccountCostCenterResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountCostCenterResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    AccountRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        number:
+          type: string
+          nullable: true
+        type:
+          type: integer
+          format: int32
+        validfrom:
+          type: string
+          nullable: true
+        validto:
+          type: string
+          nullable: true
+        bookkeepingid:
+          type: string
+          nullable: true
+        tenantid:
+          type: string
+          nullable: true
+        requirescostcenter:
+          type: boolean
+        requiresquantitiy:
+          type: boolean
+        unitofmeasure:
+          type: integer
+          format: int32
+          nullable: true
+        vatconfig:
+          type: integer
+          format: int32
+        defaultvatcodeid:
+          type: string
+          nullable: true
+        extracostdate:
+          type: boolean
+      additionalProperties: false
+    AccountResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        number:
+          type: string
+          nullable: true
+        type:
+          type: integer
+          format: int32
+        validfrom:
+          type: string
+          nullable: true
+        validto:
+          type: string
+          nullable: true
+        bookkeepingid:
+          type: string
+          format: uuid
+        tenantid:
+          type: string
+          format: uuid
+          nullable: true
+        requirescostcenter:
+          type: boolean
+        requiresquantitiy:
+          type: boolean
+        unitofmeasure:
+          type: integer
+          format: int32
+          nullable: true
+        vatconfig:
+          type: integer
+          format: int32
+        defaultvatcodeid:
+          type: string
+          format: uuid
+          nullable: true
+        closed:
+          type: boolean
+        extracostdate:
+          type: boolean
+      additionalProperties: false
+    AccountResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    AccountingHistoryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        creditorid:
+          type: string
+          format: uuid
+        bookkeepingid:
+          type: string
+          format: uuid
+        accountnumber:
+          type: string
+          nullable: true
+        text:
+          type: string
+          nullable: true
+      additionalProperties: false
+    AccountingHistoryResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountingHistoryResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    ApplianceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        manufacturer:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        serialnumber:
+          type: string
+          nullable: true
+        unitid:
+          type: string
+          format: uuid
+          nullable: true
+        realestateid:
+          type: string
+          format: uuid
+      additionalProperties: false
+    ApplianceResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplianceResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    BookkeepingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        portfolioid:
+          type: string
+          format: uuid
+          nullable: true
+        realestateid:
+          type: string
+          format: uuid
+          nullable: true
+        erpref:
+          type: string
+          nullable: true
+      additionalProperties: false
+    BookkeepingResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookkeepingResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    CallerInfo:
+      type: object
+      properties:
+        type:
+          type: string
+          nullable: true
+        subject:
+          type: string
+          nullable: true
+        clientId:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ClientCredentialsTokenRequest:
+      required:
+      - client_id
+      - client_secret
+      type: object
+      properties:
+        client_id:
+          minLength: 1
+          type: string
+        client_secret:
+          minLength: 1
+          type: string
+      additionalProperties: false
+    CostCenterResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        short:
+          type: string
+          nullable: true
+      additionalProperties: false
+    CostCenterResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CostCenterResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    CreditorRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        number:
+          type: integer
+          format: int32
+          nullable: true
+        personid:
+          type: string
+          format: uuid
+      additionalProperties: false
+    CreditorResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        number:
+          type: integer
+          format: int32
+          nullable: true
+        personid:
+          type: string
+          format: uuid
+        active:
+          type: boolean
+      additionalProperties: false
+    CreditorResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditorResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    DmsReferenceRequest:
+      type: object
+      properties:
+        archive:
+          type: string
+          nullable: true
+        documentId:
+          type: string
+          nullable: true
+      additionalProperties: false
+    DmsReferenceResponse:
+      type: object
+      properties:
+        archive:
+          type: string
+          nullable: true
+        documentId:
+          type: string
+          nullable: true
+      additionalProperties: false
+    DocumentLinkRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        entity-type:
+          type: string
+          nullable: true
+      additionalProperties: false
+    DocumentLinkResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        entity-type:
+          type: string
+          nullable: true
+      additionalProperties: false
+    DocumentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        filedate:
+          type: string
+          format: date-time
+        type:
+          type: string
+          nullable: true
+        mime-type:
+          type: string
+          nullable: true
+        extention:
+          type: string
+          nullable: true
+        url:
+          type: string
+          nullable: true
+        barcode:
+          type: string
+          nullable: true
+        storageTargets:
+          type: array
+          items:
+            type: string
+          nullable: true
+        dmsReference:
+          $ref: '#/components/schemas/DmsReferenceRequest'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentLinkRequest'
+          nullable: true
+      additionalProperties: false
+    DocumentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        filedate:
+          type: string
+          format: date-time
+        type:
+          type: string
+          nullable: true
+        mime-type:
+          type: string
+          nullable: true
+        extention:
+          type: string
+          nullable: true
+        url:
+          type: string
+          nullable: true
+        barcode:
+          type: string
+          nullable: true
+        storageTargets:
+          type: array
+          items:
+            type: string
+          nullable: true
+        dmsReference:
+          $ref: '#/components/schemas/DmsReferenceResponse'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentLinkResponse'
+          nullable: true
+      additionalProperties: false
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          nullable: true
+        details:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+      additionalProperties: false
+    HouseResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          nullable: true
+        street:
+          type: string
+          nullable: true
+        zip:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        housenumber:
+          type: string
+          nullable: true
+        egid:
+          type: string
+          nullable: true
+        realestateid:
+          type: string
+          format: uuid
+      additionalProperties: false
+    HouseResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HouseResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    InfoResponse:
+      type: object
+      properties:
+        service:
+          type: string
+          nullable: true
+        version:
+          type: string
+          nullable: true
+        apiVersion:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        caller:
+          $ref: '#/components/schemas/CallerInfo'
+      additionalProperties: false
+    InvoiceAccountingData:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sort:
+          type: integer
+          format: int32
+        accountid:
+          type: string
+          format: uuid
+          nullable: true
+        costcenterid:
+          type: string
+          format: uuid
+          nullable: true
+        date:
+          type: string
+          format: date-time
+          nullable: true
+        extracostdate:
+          type: string
+          format: date-time
+          nullable: true
+        vatdate:
+          type: string
+          format: date-time
+          nullable: true
+        text:
+          type: string
+          nullable: true
+        amount:
+          type: number
+          format: double
+        netamount:
+          type: number
+          format: double
+          nullable: true
+        vatcode:
+          type: string
+          nullable: true
+        vatcodeid:
+          type: string
+          format: uuid
+          nullable: true
+        vatrate:
+          type: number
+          format: double
+          nullable: true
+        vatamount:
+          type: number
+          format: double
+          nullable: true
+        vatproportion:
+          type: number
+          format: double
+          nullable: true
+        unitofmeasure:
+          type: integer
+          format: int32
+        quantity:
+          type: number
+          format: double
+          nullable: true
+        realestateid:
+          type: string
+          format: uuid
+          nullable: true
+        unitid:
+          type: string
+          format: uuid
+          nullable: true
+        applianceid:
+          type: string
+          format: uuid
+          nullable: true
+      additionalProperties: false
+    InvoiceAccountingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sort:
+          type: integer
+          format: int32
+        accountid:
+          type: string
+          format: uuid
+          nullable: true
+        costcenterid:
+          type: string
+          format: uuid
+          nullable: true
+        date:
+          type: string
+          format: date-time
+          nullable: true
+        extracostdate:
+          type: string
+          format: date-time
+          nullable: true
+        vatdate:
+          type: string
+          format: date-time
+          nullable: true
+        text:
+          type: string
+          nullable: true
+        amount:
+          type: number
+          format: double
+        netamount:
+          type: number
+          format: double
+          nullable: true
+        vatcode:
+          type: string
+          nullable: true
+        vatrate:
+          type: number
+          format: double
+          nullable: true
+        vatamount:
+          type: number
+          format: double
+          nullable: true
+        vatproportion:
+          type: number
+          format: double
+          nullable: true
+        unitofmeasure:
+          type: integer
+          format: int32
+        quantity:
+          type: number
+          format: double
+          nullable: true
+        unitid:
+          type: string
+          format: uuid
+          nullable: true
+        applianceid:
+          type: string
+          format: uuid
+          nullable: true
+      additionalProperties: false
+    InvoiceCreditorData:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        name1:
+          type: string
+          nullable: true
+        street:
+          type: string
+          nullable: true
+        zip:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        legal:
+          type: boolean
+        phonebusiness:
+          type: string
+          nullable: true
+        phoneprivate:
+          type: string
+          nullable: true
+        mobile:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+      additionalProperties: false
+    InvoiceCreditorResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        name1:
+          type: string
+          nullable: true
+        street:
+          type: string
+          nullable: true
+        zip:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        legal:
+          type: boolean
+        phonebusiness:
+          type: string
+          nullable: true
+        phoneprivate:
+          type: string
+          nullable: true
+        mobile:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+      additionalProperties: false
+    InvoiceData:
+      type: object
+      properties:
+        invoicenumber:
+          type: string
+          nullable: true
+        type:
+          type: integer
+          format: int32
+        fullysighted:
+          type: string
+          nullable: true
+        date:
+          type: string
+          format: date-time
+        duedate:
+          type: string
+          format: date-time
+          nullable: true
+        amount:
+          type: number
+          format: double
+        creditor:
+          $ref: '#/components/schemas/InvoiceCreditorData'
+        orderid:
+          type: string
+          nullable: true
+        paymentaccountid:
+          type: string
+          nullable: true
+        paymentinfo:
+          $ref: '#/components/schemas/PaymentInfoData'
+        bookkeepingid:
+          type: string
+          format: uuid
+        unitid:
+          type: string
+          nullable: true
+        payoutbankaccountid:
+          type: string
+          nullable: true
+        fileId:
+          type: string
+          format: uuid
+        accountings:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceAccountingData'
+          nullable: true
+      additionalProperties: false
+    InvoiceFileResponse:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        type:
+          type: integer
+          format: int32
+        filedate:
+          type: string
+          format: date-time
+          nullable: true
+        mimetype:
+          type: string
+          nullable: true
+        extension:
+          type: string
+          nullable: true
+        linkarchive:
+          type: string
+          nullable: true
+        linkid:
+          type: string
+          nullable: true
+        hash:
+          type: string
+          nullable: true
+      additionalProperties: false
+    InvoicePaymentInfoResponse:
+      type: object
+      properties:
+        iban:
+          type: string
+          nullable: true
+        type:
+          type: string
+          nullable: true
+        reference:
+          type: string
+          nullable: true
+      additionalProperties: false
+    InvoiceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoicenumber:
+          type: string
+          nullable: true
+        type:
+          type: integer
+          format: int32
+        fullysighted:
+          type: boolean
+        date:
+          type: string
+          format: date-time
+        duedate:
+          type: string
+          format: date-time
+          nullable: true
+        paiddate:
+          type: string
+          format: date-time
+          nullable: true
+        amount:
+          type: number
+          format: double
+        bookkeepingid:
+          type: string
+          format: uuid
+        unitid:
+          type: string
+          nullable: true
+        paymentaccountid:
+          type: string
+          format: uuid
+          nullable: true
+        payoutbankaccountid:
+          type: string
+          format: uuid
+          nullable: true
+        existingfileid:
+          type: string
+          format: uuid
+        orderid:
+          type: string
+          nullable: true
+        incidentid:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: '#/components/schemas/InvoiceStatus'
+        state:
+          type: integer
+          format: int32
+        rejectedcomment:
+          type: string
+          nullable: true
+        erperrorcode:
+          type: integer
+          format: int32
+          nullable: true
+        erperrortext:
+          type: string
+          nullable: true
+        paymentpurpose:
+          type: string
+          nullable: true
+        errormessage:
+          type: string
+          nullable: true
+        creditor:
+          $ref: '#/components/schemas/InvoiceCreditorResponse'
+        paymentinfo:
+          $ref: '#/components/schemas/InvoicePaymentInfoResponse'
+        file:
+          $ref: '#/components/schemas/InvoiceFileResponse'
+        accountings:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceAccountingResponse'
+          nullable: true
+        created:
+          type: string
+          format: date-time
+        updated:
+          type: string
+          format: date-time
+      additionalProperties: false
+    InvoiceResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    InvoiceStatus:
+      enum:
+      - Pending
+      - Approved
+      - Rejected
+      type: string
+    InvoiceUploadRequest:
+      type: object
+      properties:
+        version:
+          type: string
+          nullable: true
+        originsystem:
+          type: string
+          nullable: true
+        messageid:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+          nullable: true
+        invoices:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceWrapper'
+          nullable: true
+      additionalProperties: false
+    InvoiceWrapper:
+      type: object
+      properties:
+        invoice:
+          $ref: '#/components/schemas/InvoiceData'
+      additionalProperties: false
+    OrderMlResponse:
+      type: object
+      properties:
+        language:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        instruction:
+          type: string
+          nullable: true
+      additionalProperties: false
+    OrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          format: int32
+        date:
+          type: string
+          format: date-time
+        state:
+          type: integer
+          format: int32
+        contractorid:
+          type: string
+          format: uuid
+          nullable: true
+        incidentid:
+          type: string
+          format: uuid
+        realestateid:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        mls:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderMlResponse'
+          nullable: true
+      additionalProperties: false
+    OrderResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    PaymentAccountResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        creditorid:
+          type: string
+          format: uuid
+        type:
+          type: integer
+          format: int32
+        name:
+          type: string
+          nullable: true
+        iban:
+          type: string
+          nullable: true
+        valid:
+          type: boolean
+      additionalProperties: false
+    PaymentAccountResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentAccountResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    PaymentInfoData:
+      type: object
+      properties:
+        iban:
+          type: string
+          nullable: true
+        type:
+          type: string
+          nullable: true
+        reference:
+          type: string
+          nullable: true
+      additionalProperties: false
+    PayoutBankAccountBookkeepingResponse:
+      type: object
+      properties:
+        payoutbankaccountid:
+          type: string
+          format: uuid
+        bookkeepingid:
+          type: string
+          format: uuid
+        default:
+          type: boolean
+      additionalProperties: false
+    PayoutBankAccountBookkeepingResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutBankAccountBookkeepingResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    PayoutBankAccountResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        iban:
+          type: string
+          nullable: true
+        valid:
+          type: boolean
+      additionalProperties: false
+    PayoutBankAccountResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutBankAccountResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    PersonResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        updated:
+          type: string
+          format: date-time
+        legal:
+          type: boolean
+        gender:
+          type: integer
+          format: int32
+        name1:
+          type: string
+          nullable: true
+        name2:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        mobile:
+          type: string
+          nullable: true
+        phoneprivate:
+          type: string
+          nullable: true
+        phonebusiness:
+          type: string
+          nullable: true
+        street:
+          type: string
+          nullable: true
+        housenumber:
+          type: string
+          nullable: true
+        zip:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+      additionalProperties: false
+    PersonResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PersonResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    PortfolioResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerid:
+          type: string
+          format: uuid
+        number:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+      additionalProperties: false
+    PortfolioResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortfolioResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    RealestatePersonResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        updated:
+          type: string
+          format: date-time
+        realestateid:
+          type: string
+          format: uuid
+        personid:
+          type: string
+          format: uuid
+        role:
+          type: integer
+          format: int32
+          nullable: true
+      additionalProperties: false
+    RealestatePersonResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RealestatePersonResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    RealestateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        number:
+          type: string
+          nullable: true
+        condominium:
+          type: boolean
+        managementid:
+          type: string
+          format: uuid
+          nullable: true
+        portfolioid:
+          type: string
+          format: uuid
+      additionalProperties: false
+    RealestateResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RealestateResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    RealestateUserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        realestateId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        role:
+          type: integer
+          format: int32
+      additionalProperties: false
+    RealestateUserResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RealestateUserResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    RealestateVisaResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        realestateId:
+          type: string
+          format: uuid
+        personId:
+          type: string
+          format: uuid
+        role:
+          type: integer
+          format: int32
+        updated:
+          type: string
+          format: date-time
+      additionalProperties: false
+    RealestateVisaResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RealestateVisaResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    TenancyPersonResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        updated:
+          type: string
+          format: date-time
+        realestateid:
+          type: string
+          format: uuid
+        personid:
+          type: string
+          format: uuid
+        tenancyid:
+          type: string
+          format: uuid
+        role:
+          type: integer
+          format: int32
+      additionalProperties: false
+    TenancyPersonResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenancyPersonResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    TenancyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        realestateid:
+          type: string
+          format: uuid
+        tenantid:
+          type: string
+          format: uuid
+        unitid:
+          type: string
+          format: uuid
+        leasestart:
+          type: string
+          format: date-time
+          nullable: true
+        leaseend:
+          type: string
+          format: date-time
+          nullable: true
+        movein:
+          type: string
+          format: date-time
+          nullable: true
+        moveout:
+          type: string
+          format: date-time
+          nullable: true
+      additionalProperties: false
+    TenancyResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenancyResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    TenantResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+      additionalProperties: false
+    TenantResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    TokenRequest:
+      type: object
+      properties:
+        type:
+          pattern: ^(user|m2m)$
+          type: string
+          nullable: true
+        subject:
+          type: string
+          nullable: true
+        clientId:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          nullable: true
+        erp:
+          type: string
+          nullable: true
+        customerNumber:
+          type: string
+          nullable: true
+        expiryMinutes:
+          maximum: 1440
+          minimum: 1
+          type: integer
+          format: int32
+      additionalProperties: false
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          nullable: true
+        tokenType:
+          type: string
+          nullable: true
+        expiresIn:
+          type: integer
+          format: int32
+        expiresAt:
+          type: string
+          format: date-time
+      additionalProperties: false
+    UnitResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          format: int32
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        floor:
+          type: integer
+          format: int32
+          nullable: true
+        rooms:
+          type: number
+          format: double
+          nullable: true
+        houseid:
+          type: string
+          format: uuid
+        realestateid:
+          type: string
+          format: uuid
+      additionalProperties: false
+    UnitResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnitResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name1:
+          type: string
+          nullable: true
+        name2:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+      additionalProperties: false
+    UserResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    VatCodeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        short:
+          type: string
+          nullable: true
+        bookkeepingid:
+          type: string
+          format: uuid
+          nullable: true
+        vatratetype:
+          type: integer
+          format: int32
+        proportionally:
+          type: boolean
+      additionalProperties: false
+    VatCodeResponsePaginatedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VatCodeResponse'
+          nullable: true
+        totalCount:
+          type: integer
+          format: int32
+        pageCount:
+          type: integer
+          format: int32
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+      additionalProperties: false
+    Void:
+      type: object
+      additionalProperties: false
+  securitySchemes:
+    Bearer:
+      type: http
+      description: Enter your JWT token (without 'Bearer ' prefix)
+      scheme: bearer
+      bearerFormat: JWT
+security:
+- Bearer: []

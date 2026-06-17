@@ -10,33 +10,53 @@ So erhalten und verwenden Sie Zugangsdaten.
 
 ## Token holen
 
-Sie fragen das Token an einem Endpunkt der API an:
+Sie fragen das Token an einem Endpunkt der API an. Der Endpunkt nimmt einen **JSON-Body** mit
+`client_id` und `client_secret` entgegen (kein Formular, kein `grant_type`-Feld – das ergänzt die API
+selbst):
 
 ```
 POST {basis-url}/api/v1/dms/token
-Content-Type: application/x-www-form-urlencoded
+Content-Type: application/json
 
-grant_type=client_credentials
-client_id=<ihre client id>
-client_secret=<ihr client secret>
+{
+  "client_id": "<ihre client id>",
+  "client_secret": "<ihr client secret>"
+}
 ```
 
-Die Antwort ist eine Standard-OAuth-Token-Antwort (`access_token`, `token_type=Bearer`, `expires_in`, …).
+Die Antwort ist ein JSON-Objekt mit dem Token und seiner Gültigkeit:
+
+```json
+{
+  "token": "<jwt>",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "expiresAt": "2026-01-01T01:00:00Z"
+}
+```
 
 Der Endpunkt ist auf **30 Anfragen/Minute pro IP** begrenzt – speichern Sie das Token zwischen und
-verwenden Sie es bis zum Ablauf wieder.
+verwenden Sie es bis `expiresAt` wieder.
 
 ## Token verwenden
 
-Bei jeder Anfrage mitsenden:
+Bei jeder Anfrage mitsenden – das `token`-Feld aus der Antwort als Bearer-Token:
 
 ```
 GET {basis-url}/api/v1/dms/documents?changed_since=2026-01-01T00:00:00Z
-Authorization: Bearer <access_token>
+Authorization: Bearer <token>
 ```
+
+## Basis-URLs
+
+| Umgebung | Basis-URL |
+| --- | --- |
+| Test | `https://erp-test.wwimmo.ch` |
+
+Alle Pfade beginnen mit `/api/v1/dms`, z. B. `https://erp-test.wwimmo.ch/api/v1/dms/token`. Die
+**Produktions-URL** erhalten Sie beim Onboarding.
 
 ## Offen
 
-- Die **Basis-URL je Umgebung** (Dev/Test/Prod) wird noch festgelegt und hier ergänzt.
 - Das **Verfahren zur Ausgabe von `client_id`/`client_secret`** (Onboarding, Rotation) wird noch
   beschrieben.
