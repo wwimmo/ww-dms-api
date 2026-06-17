@@ -36,7 +36,7 @@ erfolgt über **Polling**: Ihr System ruft die API aktiv ab (Pull). Es gibt kein
 - [Dokument archivieren](docs/2-anleitungen/3-dokument-archivieren.md) – ERP → DMS.
 
 **3 – Referenz**
-- [OpenAPI-Spezifikation](openapi/README.md) – der verbindliche Vertrag.
+- [OpenAPI-Referenz](#openapi-referenz) – Spezifikation, Abdeckung, Anzeige.
 - [Authentifizierung](docs/3-referenz/1-authentifizierung.md) – OAuth 2.0, Token, Scope.
 - [Konventionen](docs/3-referenz/2-konventionen.md) – Polling, `changed_since`, Idempotenz, Schlüssel.
 - [Fehlerbehandlung](docs/3-referenz/3-fehler.md) – Problem+JSON.
@@ -44,3 +44,48 @@ erfolgt über **Polling**: Ihr System ruft die API aktiv ab (Pull). Es gibt kein
 **4 – Konzepte**
 - [Domänenmodell](docs/4-konzepte/1-domaenenmodell.md) – Entitäten, Beziehungen, Lebenszyklus.
 - [Glossar](docs/4-konzepte/2-glossar.md) – Fachbegriffe.
+
+## OpenAPI-Referenz
+
+Die **OpenAPI-Spezifikation ist die einzige Quelle der Wahrheit** – Pfade, Methoden, Request-/Response-Schemas,
+Feldtypen. Die handgeschriebene Doku unter [docs/](docs/) erklärt Bedeutung, Beziehungen und Lebenszyklus und
+verweist hierher, statt Feldtabellen zu duplizieren.
+
+Die Spezifikation liegt als [`openapi/dms-api.v1.yaml`](openapi/dms-api.v1.yaml) vor und wird aus dem
+laufenden Dienst generiert.
+
+### Anzeigen
+
+- **Online (Swagger UI):** <https://wwimmo.github.io/ww-dms-api/> – wird per GitHub Pages aus dieser
+  Spezifikation veröffentlicht (siehe `.github/workflows/pages.yml`), sobald das Repository öffentlich und
+  Pages aktiviert ist.
+- In VS Code mit einer OpenAPI-/Swagger-Vorschau-Erweiterung.
+- Lokal als HTML, z. B. `npx @redocly/cli preview-docs openapi/dms-api.v1.yaml`.
+
+### Was die Spezifikation abdeckt
+
+- **Dokumente:** `POST /documents`, `GET /documents` (erfordert `changed_since`), `GET /documents/{uuid}`,
+  `PUT /documents/{uuid}`, `DELETE /documents/{uuid}`, `GET /documents/{uuid}/content`.
+- **Stammdaten** (`GET`, mit `changed_since` + `changed_until`, paginiert): `/realestates`
+  (+ `/{uuid}`, `/number:{number}`), `/portfolios` (+ `/{uuid}`), `/houses`, `/units`, `/appliances`,
+  `/tenants`, `/tenancies` (+ `/{uuid}`), `/persons`, `/users`, `/realestate-persons`,
+  `/realestate-users`, `/tenancy-persons`.
+- **Buchhaltung & Rechnungen (Kreditorenprozess):** `/bookkeepings` (+ `/{uuid}`), `/creditors`
+  (GET/POST, + `/{uuid}`), `/accounts` (GET/POST), `/payment-accounts`, `/payoutbankaccounts`,
+  `/payoutbankaccountbookkeepings`, `/cost-centers`, `/account-cost-centers`, `/vat-codes`,
+  `/accountings-history`, `/orders` (+ `/{uuid}`), `/invoices` (GET/POST, + `/{uuid}` GET/DELETE).
+- **Betrieb:** `GET /health`, `GET /info`, `POST /token` (Authentifizierung).
+- **Querschnitt:** Paginierung (`page`, `page_size`, `Link`-Header), Rate-Limit-Header
+  (`X-RateLimit-*`, `Retry-After`), `bearerAuth` (JWT). Siehe
+  [Authentifizierung](docs/3-referenz/1-authentifizierung.md) und
+  [Konventionen](docs/3-referenz/2-konventionen.md).
+
+### Noch nicht im Vertrag modelliert
+
+- **Löschungen / Aufbewahrung.** `DELETE` ist als Soft-Delete umgesetzt (204). Wie gelöschte Datensätze
+  über das Polling sichtbar werden (Markierung, Aufbewahrung), wird derzeit erarbeitet – siehe
+  [Konventionen](docs/3-referenz/2-konventionen.md#löschungen).
+
+> `enum`-Werte einzelner String-Felder (z. B. Dokument-`type`, Verknüpfungs-`entity-type`,
+> `storageTargets`) sind in der Spezifikation als `string` typisiert; die gültigen Werte stehen im
+> [Domänenmodell](docs/4-konzepte/1-domaenenmodell.md) und in den [Anleitungen](docs/2-anleitungen/).

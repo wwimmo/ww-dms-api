@@ -54,4 +54,4 @@ abbrechen.
 ## Stand
 
 Ein **Katalog konkreter `type`-Werte** (je mit Bedeutung, Status und Recovery-Hinweis) wird noch ergänzt.
-Die je Endpunkt möglichen Statuscodes stehen in der [OpenAPI-Spezifikation](../../openapi/README.md).
+Die je Endpunkt möglichen Statuscodes stehen in der [OpenAPI-Spezifikation](../../openapi/dms-api.v1.yaml).

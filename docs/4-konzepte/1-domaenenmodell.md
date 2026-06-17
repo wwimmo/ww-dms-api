@@ -1,7 +1,7 @@
 # Domänenmodell
 
 Die fachliche Landkarte: was die Entitäten *bedeuten*, wie sie *zusammenhängen* und welchen Lebenszyklus
-sie haben. Feldtypen stehen in der [OpenAPI-Spezifikation](../../openapi/README.md).
+sie haben. Feldtypen stehen in der [OpenAPI-Spezifikation](../../openapi/dms-api.v1.yaml).
 
 ## Fachmodell statt ERP-Interna
 
@@ -78,7 +78,7 @@ Werden vom Rechnungsimport genutzt. Am Endpunkt hängen sie an der **Buchhaltung
 | **Rechnung** (Invoice) | Kreditorenrechnung oder Gutschrift. |
 | **Kontierung** (Accounting) | Buchungszeile zu einer Rechnung. |
 
-Diese Entitäten sind in der [OpenAPI-Spezifikation](../../openapi/README.md) als `GET`-Endpunkte
+Diese Entitäten sind in der [OpenAPI-Spezifikation](../../openapi/dms-api.v1.yaml) als `GET`-Endpunkte
 abgebildet (paginiert, mit `changed_since` + `changed_until`); `creditors`, `accounts` und `invoices`
 bieten zusätzlich `POST`. Feldtypen und die genauen Schemas stehen in der Spezifikation.
 

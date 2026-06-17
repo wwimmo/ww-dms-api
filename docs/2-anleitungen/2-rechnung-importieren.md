@@ -33,7 +33,7 @@ läuft im DMS und ist **nicht Teil dieser API**.
 
    Den genauen Request-Aufbau (`InvoiceUploadRequest` mit `bookkeepingid`-Anker, `fileId`-Bezug,
    `creditor`, `paymentinfo`, `accountings`) finden Sie in der
-   [OpenAPI-Spezifikation](../../openapi/README.md) — dort bleibt er stets aktuell.
+   [OpenAPI-Spezifikation](../../openapi/dms-api.v1.yaml) — dort bleibt er stets aktuell.
 
    Eine fälschlich übergebene Rechnung lässt sich mit `DELETE /invoices/{id}` entfernen – solange sie
    noch nicht verbucht ist (sonst `409 Conflict`).
@@ -59,5 +59,5 @@ sequenceDiagram
 Rechnungen hängen an der **Buchhaltung** (`bookkeepingid`) und tragen Kreditor, Zahlinformationen,
 Buchungszeilen (`accountings`) und einen Datei-Bezug (`fileId` auf ein bereits abgelegtes Dokument). Die
 vollständigen Strukturen (`InvoiceUploadRequest`, `InvoiceData`, `InvoiceAccountingData`, …) stehen in der
-[OpenAPI-Spezifikation](../../openapi/README.md); die fachliche Einordnung im
+[OpenAPI-Spezifikation](../../openapi/dms-api.v1.yaml); die fachliche Einordnung im
 [Domänenmodell](../4-konzepte/1-domaenenmodell.md#buchhaltungs-entitäten).
