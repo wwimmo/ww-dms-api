@@ -45,6 +45,10 @@ erfolgt über **Polling**: Ihr System ruft die API aktiv ab (Pull). Es gibt kein
 - [Domänenmodell](docs/4-konzepte/1-domaenenmodell.md) – Entitäten, Beziehungen, Lebenszyklus.
 - [Glossar](docs/4-konzepte/2-glossar.md) – Fachbegriffe.
 
+**Ausprobieren**
+- [Bruno-Collection](bruno/README.md) – einsatzbereite Beispiel-Requests für alle Endpunkte
+  (Token holen, Stammdaten, Finanzstammdaten, Buchungskreise, Rechnungen) zum direkten Testen.
+
 ## OpenAPI-Referenz
 
 Die **OpenAPI-Spezifikation ist die einzige Quelle der Wahrheit** – Pfade, Methoden, Request-/Response-Schemas,
