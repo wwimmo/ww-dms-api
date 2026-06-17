@@ -44,8 +44,3 @@ erfolgt über **Polling**: Ihr System ruft die API aktiv ab (Pull). Es gibt kein
 **4 – Konzepte**
 - [Domänenmodell](docs/4-konzepte/1-domaenenmodell.md) – Entitäten, Beziehungen, Lebenszyklus.
 - [Glossar](docs/4-konzepte/2-glossar.md) – Fachbegriffe.
-
----
-
-> Die Dokumentation befindet sich im Aufbau. Hinweise für Mitwirkende sowie der Stand offener Punkte
-> stehen in [CONTRIBUTING.md](CONTRIBUTING.md).
