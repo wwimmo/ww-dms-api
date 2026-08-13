@@ -78,7 +78,7 @@ laufenden Dienst generiert.
 - **Buchhaltung & Rechnungen (Kreditorenprozess):** `/bookkeepings` (+ `/{uuid}`), `/creditors`
   (GET/POST, + `/{uuid}`), `/accounts` (GET/POST), `/payment-accounts`, `/payoutbankaccounts`,
   `/payoutbankaccountbookkeepings`, `/cost-centers`, `/account-cost-centers`, `/vat-codes`,
-  `/accountings-history`, `/orders` (+ `/{uuid}`), `/invoices` (GET/POST, + `/{uuid}` GET/DELETE).
+  `/accountings-history`, `/orders` (+ `/{uuid}`), `/invoices` (GET/POST, + `/{uuid}` GET).
 - **Betrieb:** `GET /health`, `GET /info`, `POST /token` (Authentifizierung).
 - **Querschnitt:** Paginierung (`page`, `page_size`, `Link`-Header), Rate-Limit-Header
   (`X-RateLimit-*`, `Retry-After`), `bearerAuth` (JWT). Siehe
@@ -87,9 +87,11 @@ laufenden Dienst generiert.
 
 ### Noch nicht im Vertrag modelliert
 
-- **Löschungen / Aufbewahrung.** `DELETE` ist als Soft-Delete umgesetzt (204). Wie gelöschte Datensätze
+- **Löschungen / Aufbewahrung.** `DELETE /documents/{uuid}` antwortet mit 204. Wie gelöschte Datensätze
   über das Polling sichtbar werden (Markierung, Aufbewahrung), wird derzeit erarbeitet – siehe
   [Konventionen](docs/3-referenz/2-konventionen.md#löschungen).
+- **Storno einer Rechnung.** Es gibt keinen Endpunkt dafür; eine übergebene Rechnung lässt sich über die
+  API nicht zurücknehmen – siehe [Konventionen](docs/3-referenz/2-konventionen.md#löschungen).
 
 > `enum`-Werte einzelner String-Felder (z. B. Dokument-`type`, Verknüpfungs-`entity-type`,
 > `storageTargets`) sind in der Spezifikation als `string` typisiert; die gültigen Werte stehen im

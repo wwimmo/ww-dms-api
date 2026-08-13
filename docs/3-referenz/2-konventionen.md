@@ -82,13 +82,14 @@ Lesende Abrufe können beliebig wiederholt werden.
 
 ## Löschungen
 
-`DELETE`-Endpunkte (z. B. `DELETE /documents/{uuid}`, `DELETE /invoices/{uuid}`) antworten mit
-`204 No Content`.
+`DELETE /documents/{uuid}` antwortet mit `204 No Content`.
 
 > Ob Löschungen als Soft-Delete (Markierung) oder physisch umgesetzt werden, ist noch nicht festgelegt.
-> `DELETE /invoices/{uuid}` entfernt derzeit nur die Kopie der DMS-API – die Rechnung bleibt im
-> Visums-Workflow des ERP bestehen und wird von `GET /invoices/{uuid}` weiterhin geliefert. Verlassen Sie
-> sich noch nicht darauf, damit eine Rechnung zu stornieren.
+
+> **Rechnungen lassen sich nicht stornieren.** Es gibt keinen `DELETE`-Endpunkt für `/invoices/{uuid}`;
+> die Route beantwortet `DELETE` mit `405 Method Not Allowed`. Der Storno müsste im Visums-Workflow des
+> ERP greifen, und dafür existiert noch keine Schnittstelle. Prüfen Sie eine Rechnung deshalb vor dem
+> `POST` – eine Korrektur ist danach nur im ERP möglich.
 
 > Wie gelöschte Datensätze über das Polling sichtbar gemacht werden (Markierung, Aufbewahrung), wird
 > derzeit erarbeitet und hier ergänzt, sobald es feststeht.
