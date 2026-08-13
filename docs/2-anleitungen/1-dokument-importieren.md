@@ -43,11 +43,14 @@ E-Rechnung.
 3. **Dokument aktualisieren**, falls sich etwas ändert (z. B. weitere Verknüpfungen, neuer Name):
 
    ```
-   PUT /documents/{id}
+   PATCH /documents/{id}
    ```
 
-   Ein nicht mehr benötigtes Dokument lässt sich mit `DELETE /documents/{id}` löschen (Soft-Delete,
-   Antwort `204`).
+   `PATCH` ändert nur die mitgesendeten Eigenschaften. `PUT /documents/{id}` ersetzt das Dokument
+   vollständig und leert dabei nicht mitgesendete Eigenschaften – siehe
+   [Konventionen](../3-referenz/2-konventionen.md#teilaktualisierung-patch-statt-put).
+
+   Ein nicht mehr benötigtes Dokument lässt sich mit `DELETE /documents/{id}` löschen (Antwort `204`).
 
 ## Ablauf
 
@@ -62,7 +65,7 @@ sequenceDiagram
   DMS->>+API: POST /documents
   API->>ERP: Datei anlegen
   API-->>-DMS: { id: "..." }
-  DMS->>+API: PUT /documents/{id}
+  DMS->>+API: PATCH /documents/{id}
   API->>ERP: Datei aktualisieren
   API-->>-DMS: 200
 ```

@@ -35,8 +35,8 @@ läuft im DMS und ist **nicht Teil dieser API**.
    `creditor`, `paymentinfo`, `accountings`) finden Sie in der
    [OpenAPI-Spezifikation](../../openapi/dms-api.v1.yaml) — dort bleibt er stets aktuell.
 
-   Eine fälschlich übergebene Rechnung lässt sich mit `DELETE /invoices/{id}` entfernen – solange sie
-   noch nicht verbucht ist (sonst `409 Conflict`).
+   Eine übergebene Rechnung lässt sich über die API **nicht** zurücknehmen – es gibt keinen Storno.
+   Prüfen Sie die Daten deshalb vor dem `POST`; eine Korrektur ist danach nur im ERP möglich.
 
 ## Ablauf
 

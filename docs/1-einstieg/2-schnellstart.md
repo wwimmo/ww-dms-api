@@ -40,8 +40,8 @@ curl -s "$BASE_URL/documents?changed_since=2026-01-01T00:00:00Z" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-`changed_since` ist erforderlich. Siehe
-[Konventionen](../3-referenz/2-konventionen.md#polling-mit-changed_since).
+Ohne `changed_since` liefert der Endpunkt den Vollbestand – für den laufenden Abgleich immer mitsenden.
+Siehe [Konventionen](../3-referenz/2-konventionen.md#polling-mit-changed_since).
 
 ## 3. Dokumentinhalt lesen
 

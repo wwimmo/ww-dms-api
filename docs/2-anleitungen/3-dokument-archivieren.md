@@ -36,7 +36,7 @@ zurückgeschrieben. Beispiel: Buchungsbelege zu manuellen Buchungen, Mahnbriefe 
    Archivierung kennt:
 
    ```
-   PUT /documents/{id}
+   PATCH /documents/{id}
    Content-Type: application/json
 
    {
@@ -44,6 +44,13 @@ zurückgeschrieben. Beispiel: Buchungsbelege zu manuellen Buchungen, Mahnbriefe 
      "storageTargets": ["DMS", "ERP"]
    }
    ```
+   `PATCH` ist eine **Teilaktualisierung**: nicht mitgesendete Eigenschaften bleiben unverändert.
+
+   > **Nicht `PUT` verwenden.** `PUT` ersetzt das Dokument vollständig, nicht mitgesendete Eigenschaften
+   > werden geleert. Ein `PUT` mit nur `dmsReference` löscht damit die `links` des Dokuments
+   > (Liegenschaft, Mietverhältnis …). Siehe
+   > [Konventionen → Teilaktualisierung](../3-referenz/2-konventionen.md#teilaktualisierung-patch-statt-put).
+
    Das ERP kann seine E-Dossier-Kopie anschliessend optional entfernen (das Dokument liegt dann nur im DMS
    oder in beiden Systemen).
 
@@ -65,7 +72,7 @@ sequenceDiagram
   API-->>-DMS: Liegenschaft
   DMS->>+API: GET /tenancies/{id}
   API-->>-DMS: Mietverhältnis
-  DMS->>+API: PUT /documents/{id} { dmsReference: {...} }
+  DMS->>+API: PATCH /documents/{id} { dmsReference: {...} }
   API->>ERP: Datei aktualisieren
   ERP->>ERP: optional E-Dossier-Version löschen
   API-->>-DMS: 200
@@ -76,3 +83,7 @@ sequenceDiagram
 - `storageTargets` drückt nach der Archivierung aus, wo die Datei liegt: `["DMS"]` (nur DMS) oder
   `["DMS","ERP"]` (beide).
 - Ob das ERP seine E-Dossier-Kopie löscht, ist optional.
+- Wollen Sie ausschliessen, dass Ihr Rückschreiben eine zwischenzeitliche Änderung des ERP überschreibt:
+  den `ETag` aus Schritt 1/2 als `If-Match` mitsenden. Bei veralteter Version antwortet die API mit
+  `412 Precondition Failed` statt zu schreiben – siehe
+  [Konventionen → Schreiben mit If-Match](../3-referenz/2-konventionen.md#schreiben-mit-if-match).
