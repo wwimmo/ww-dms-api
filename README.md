@@ -68,8 +68,9 @@ laufenden Dienst generiert.
 
 ### Was die Spezifikation abdeckt
 
-- **Dokumente:** `POST /documents`, `GET /documents` (erfordert `changed_since`), `GET /documents/{uuid}`,
-  `PUT /documents/{uuid}`, `DELETE /documents/{uuid}`, `GET /documents/{uuid}/content`.
+- **Dokumente:** `POST /documents`, `GET /documents`, `GET /documents/{uuid}`,
+  `PATCH /documents/{uuid}` (Teilaktualisierung), `PUT /documents/{uuid}` (Vollersatz),
+  `DELETE /documents/{uuid}`, `GET /documents/{uuid}/content`.
 - **Stammdaten** (`GET`, mit `changed_since` + `changed_until`, paginiert): `/realestates`
   (+ `/{uuid}`, `/number:{number}`), `/portfolios` (+ `/{uuid}`), `/houses`, `/units`, `/appliances`,
   `/tenants`, `/tenancies` (+ `/{uuid}`), `/persons`, `/users`, `/realestate-persons`,

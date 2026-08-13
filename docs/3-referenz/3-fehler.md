@@ -36,14 +36,15 @@ anzuzeigen.
 
 | Status | Wahrscheinliche Ursache | Was tun |
 | --- | --- | --- |
-| `400` | Validierungsproblem in der Anfrage (z. B. fehlender/ungültiger `changed_since`, ungültiger `type`/`entity-type`, ungültige Seitengrösse). | `detail` prüfen, Anfrage korrigieren; nicht unverändert wiederholen. |
+| `400` | Validierungsproblem in der Anfrage (z. B. ungültiger `changed_since`, ungültiger `type`/`entity-type`, ungültige Seitengrösse, `links` mit unbekannter ID). | `detail` prüfen, Anfrage korrigieren; nicht unverändert wiederholen. |
 | `401` | Token fehlt/abgelaufen. | Neues Token anfordern (siehe [Authentifizierung](1-authentifizierung.md)); einmal wiederholen. |
 | `403` | Token hat den Scope `wwimmo:dms:api` nicht bzw. keinen `customerid`-Bezug. | Zugangsdaten/Scope prüfen – nicht blind wiederholen. |
 | `404` | Unbekannte ID / unbekannter Schlüssel. | Als „nicht vorhanden" behandeln; nicht wiederholen. |
 | `409` | Konflikt mit dem aktuellen Zustand (z. B. eine bereits verbuchte Rechnung löschen). | Nicht wiederholen; fachlich klären. |
+| `412` | Mitgesendetes `If-Match` benennt nicht den aktuellen Stand – das Dokument wurde zwischenzeitlich geändert. | Neu lesen, Änderung erneut anwenden, mit dem aktuellen `ETag` wiederholen. Siehe [Konventionen](2-konventionen.md#schreiben-mit-if-match). |
 | `429` | Rate-Limit. | Zurückhalten; `Retry-After` beachten. Siehe [Konventionen](2-konventionen.md#rate-limits). |
 | `502` | Vorgelagerter Dienst nicht erreichbar (z. B. beim Token-Bezug). | Mit Backoff wiederholen. |
-| `5xx` | Serverseitig. | Mit Backoff wiederholen; dank Idempotenz unbedenklich. |
+| `5xx` | Serverseitig. | Mit Backoff wiederholen. **Achtung:** schreibende Aufrufe sind nicht idempotent – nach einem Timeout erst per `GET` prüfen, ob der erste Versuch angekommen ist (siehe [Konventionen](2-konventionen.md#idempotenz)). |
 
 ## Retry-Strategie
 

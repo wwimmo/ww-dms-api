@@ -36,9 +36,11 @@ Sie konsumieren die API ausschliesslich durch **Abrufen** – typischerweise
 [Konventionen](../3-referenz/2-konventionen.md) beschrieben sind:
 
 - Jede Änderung trägt einen Zeitstempel, damit `changed_since` sie findet.
-- Löschungen sind als Soft-Delete umgesetzt; wie sie über das Polling sichtbar werden, wird derzeit
-  erarbeitet – siehe [Konventionen](../3-referenz/2-konventionen.md#löschungen).
-- Aufrufe sind idempotent – ein wiederholter Abruf verarbeitet nichts doppelt.
+- Wie Löschungen über das Polling sichtbar werden, wird derzeit erarbeitet – siehe
+  [Konventionen](../3-referenz/2-konventionen.md#löschungen).
+- **Lesende** Abrufe sind beliebig wiederholbar. **Schreibende** Aufrufe sind es nicht: es gibt noch keinen
+  Idempotenz-Schlüssel, eine Wiederholung nach einem Timeout legt einen zweiten Datensatz an – siehe
+  [Konventionen](../3-referenz/2-konventionen.md#idempotenz).
 
 ## Das Domänenmodell
 
