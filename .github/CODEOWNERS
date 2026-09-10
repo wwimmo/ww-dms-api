@@ -1,0 +1,11 @@
+# Zuständigkeiten – GitHub fordert diese Personen automatisch als Reviewer an, auch für den
+# Bot-PR des Spec-Syncs. Der Vertrag (openapi/, CHANGELOG) liegt beim Backend, die Prosa und die
+# Bruno-Collection bei Backend und Produkt.
+/openapi/       @mcwwimmo
+/CHANGELOG.md   @mcwwimmo
+/scripts/       @mcwwimmo
+/.github/       @mcwwimmo
+/redocly.yaml   @mcwwimmo
+/docs/          @mcwwimmo @psi-ww
+/bruno/         @mcwwimmo @psi-ww
+/README.md      @mcwwimmo @psi-ww
