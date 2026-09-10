@@ -1,0 +1,17 @@
+# Redocly-Lint für die generierte Spezifikation. `redocly lint` ohne Argumente prüft `dms@v1`.
+extends:
+  - recommended
+
+apis:
+  dms@v1:
+    root: openapi/dms-api.v1.yaml
+
+rules:
+  # Jede Operation braucht eine Summary – Partner sehen sie als Zeile in der Swagger UI. Im Backend
+  # hält der Test OpenApiExportTests.EveryOperationHasASummary das ein; hier ist es der Vertrag.
+  operation-summary: error
+  # Partner-API ohne Lizenzblock; die Regel wäre nur Rauschen.
+  info-license: off
+  # Swashbuckle vergibt keine operationIds. Follow-up im Backend (CustomOperationIds); bis dahin Warnung.
+  operation-operationId: warn
+  operation-4xx-response: warn
