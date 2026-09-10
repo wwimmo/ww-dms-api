@@ -18,18 +18,17 @@ läuft.
 
 Die **Buchhaltung** kennt drei Ausprägungen, die implizit über die gesetzten Fremdschlüssel erkennbar
 sind: *Portfolio-Modus* (`portfolioid` gesetzt), *Liegenschafts-Modus* (`realestateid` gesetzt) und
-*Standalone* (beide leer). Für ImmoTop2 kommt nur der Portfolio-Modus zum Tragen. 
+*Standalone* (beide leer). Für ImmoTop2 kommt nur der Portfolio-Modus zum Tragen.
 
 ## Stammdaten
 
-Die stabilen Bezugsobjekte. Eine Zeile je Entität – vollständige Attribute in der Spezifikation und im
-Wiki.
+Die stabilen Bezugsobjekte. Eine Zeile je Entität – vollständige Attribute in der Spezifikation.
 
 | Entität | Bedeutung |
 | --- | --- |
 | **Portfolio** | Verwaltete Zusammenfassung mehrerer Liegenschaften eines Eigentümers. |
-| **Eigentümer** (Owner) | Rechtlich verantwortliche Partei; trägt Ertrag und Kosten; erteilt den Bewirtschaftungsauftrag. |
-| **Verwaltung** (Management) | Organisation, die die Liegenschaften bewirtschaftet. |
+| **Eigentümer** (Owner) | Rechtlich verantwortliche Partei; trägt Ertrag und Kosten; erteilt den Bewirtschaftungsauftrag. Kein eigener Endpunkt – über `Portfolio.ownerid` referenziert. |
+| **Verwaltung** (Management) | Organisation, die die Liegenschaften bewirtschaftet. Kein eigener Endpunkt – über `RealEstate.managementid` referenziert. |
 | **Liegenschaft** (RealEstate) | Rechtlich/wirtschaftlich abgegrenzte Immobilieneinheit; Basis aller Bewirtschaftungsprozesse. Gehört zu genau einem Portfolio. |
 | **Haus** (House) | Physisches Gebäude innerhalb einer Liegenschaft; enthält Objekte. |
 | **Objekt** (Unit) | Kleinste abrechenbare Mieteinheit. Gehört zu genau einer Liegenschaft (bei Wohnungen zusätzlich zu einem Haus). |
@@ -65,34 +64,37 @@ Werden vom Rechnungsimport genutzt. Am Endpunkt hängen sie an der **Buchhaltung
 
 | Entität | Bedeutung |
 | --- | --- |
-| **Buchhaltung** (Bookkeeping) | Abrechnungseinheit; Anker für Rechnungsdaten. Drei Modi (Portfolio/Liegenschaft/Standalone, siehe oben). |
+| **Buchhaltung** (Bookkeeping) | Abrechnungseinheit; Anker für Rechnungsdaten. Drei Modi (Portfolio/Liegenschaft/Standalone, siehe oben). In der Bruno-Collection «Buchungskreis» genannt. |
 | **Kreditor** (Creditor) | Ein Lieferant. Portfolio-/buchhaltungsunabhängig. |
 | **Zahlstelle** (PaymentAccount) | Zahlverbindung eines Kreditors (IBAN). |
 | **Auszahlverbindung** (PayoutBankAccount) | Auszahlende Bankverbindung ohne Liegenschaftsbezug. |
 | **Auszahlverbindung↔Buchhaltung** (PayoutBankAccountBookkeeping) | M:N-Verknüpfung; ein `default`-Flag je Verknüpfung markiert die Standard-Verbindung der Buchhaltung. |
-| **Konto** (Account) | Ein Buchhaltungskonto. |
+| **Konto** (Account) | Ein Buchhaltungskonto. Flags wie `requirescostcenter`, `vatconfig`, `extracostdate` steuern die Validierung von Kontierungen. |
 | **Kostenstelle** (CostCenter) | Kostenstelle (nur ImmoTop2). |
 | **Konto-Kostenstelle** (AccountCostCenter) | Zuweisung von Konten zu Kostenstellen. |
 | **Buchungshistorie** (AccountingHistory) | Kontierungshistorie (frühere Buchungszeilen). |
 | **MWST-Code** (VatCode) | Mehrwertsteuercode. |
-| **Rechnung** (Invoice) | Kreditorenrechnung oder Gutschrift. |
+| **Rechnung** (Invoice) | Kreditorenrechnung oder Gutschrift; trägt optional `dmsReference` auf das archivierte Dokument. |
 | **Kontierung** (Accounting) | Buchungszeile zu einer Rechnung. |
 
 Diese Entitäten sind in der [OpenAPI-Spezifikation](../../openapi/dms-api.v1.yaml) als `GET`-Endpunkte
 abgebildet (paginiert, mit `changed_since` + `changed_until`); `creditors`, `accounts` und `invoices`
-bieten zusätzlich `POST`. Feldtypen und die genauen Schemas stehen in der Spezifikation.
+bieten zusätzlich `POST`. Die Listen `accounts`, `account-cost-centers`, `cost-centers`, `vat-codes`,
+`payment-accounts`, `payoutbankaccounts` und `accountings-history` akzeptieren das Zeitfenster, wenden es
+aber nicht an (ihre ERP-Quelle kennt keine Änderungsstempel) – sie liefern immer den vollen Bestand.
 
-## Personen, Benutzer & Rollen
+## Personen & Rollen
 
-Wer mit Liegenschaften zu tun hat. Alle als paginierte `GET`-Endpunkte.
+Wer mit Liegenschaften und Mietverhältnissen zu tun hat. Alle als paginierte `GET`-Endpunkte.
 
 | Entität | Bedeutung |
 | --- | --- |
 | **Person** (Person) | Natürliche/juristische Person; Kontakt-Wurzel hinter Mietern, Kreditoren usw. Adressfelder spiegeln die jüngste Adresse. |
-| **Benutzer** (User) | ERP-Benutzer. |
 | **Liegenschaftsperson** (RealestatePerson) | Person ↔ Liegenschaft mit Rolle. |
-| **Liegenschafts-Benutzer** (RealestateUser) | Benutzer ↔ Liegenschaft mit Rolle. Rollen: 10 = Bewirtschafter (Manager), 11 = Buchhalter (Accountant). |
 | **Mietverhältnisperson** (TenancyPerson) | Person ↔ Mietverhältnis mit Rolle. |
+
+ERP-Benutzer und Visumspfade sind seit 2026-08-26 nicht mehr Teil der API (siehe
+[CHANGELOG](../../CHANGELOG.md)).
 
 ## Aufträge
 
@@ -102,26 +104,31 @@ Wer mit Liegenschaften zu tun hat. Alle als paginierte `GET`-Endpunkte.
 
 ## Dokumentmodell
 
-Ein **Dokument** (`DocumentEntity`) ist „eine lesbare Datei". Wichtige Felder:
+Ein **Dokument** ist «eine lesbare Datei». Wichtige Felder:
 
 - `id` (uuid), `name`, `filedate`, `mime-type`, `extention`, `url`, `barcode`.
-- `type` – einer von `invoice` | `credit` | `correspondence` | `assurance`.
+- `type` – einer von `invoice` | `credit` | `correspondence` | `assurance` (Eingabe
+  Gross-/Kleinschreibungs-unabhängig, Ausgabe kleingeschrieben).
 - `storageTargets` – Liste aus `DMS` | `ERP`: wo die Datei physisch liegt.
-- `dmsReference` – `{ archive, documentId }`: die Rück-Referenz, sobald das DMS archiviert hat.
-- `links` – Liste von `DocumentLinkEntity` `{ id, entity-type }` zur Verknüpfung mit Stammdaten
+- `dmsReference` – `{ archive, documentId }`: die Rück-Referenz, sobald das DMS archiviert hat. `archive`
+  ist die Archiv-UUID Ihrer Anbindung, `documentId` Pflicht, wenn das Objekt gesetzt ist.
+- `links` – Liste von `{ id, entity-type }` zur Verknüpfung mit Stammdaten Ihres Mandanten
   (`realestate`, `house`, `unit`, `appliance`, `tenant`, `tenancy`).
+
+`GET /documents` ist paginiert, nimmt das Zeitfenster und das Flag `requires_dms_archiving` (= `DMS` in
+`storageTargets` **und** `dmsReference` leer: die Archivierungsaufträge).
 
 ### Lebenszyklus (informell)
 
 ```
-Import:      im DMS erstellt → Metadaten an ERP (POST) → im E-Dossier verlinkt
-Archivierung: im ERP erstellt → vom DMS geholt → im DMS archiviert
-              → dmsReference zurückgeschrieben (PUT) → optional aus ERP entfernt
-Löschung:    DELETE /documents/{uuid} → Soft-Delete (204)
+Import:       im DMS erstellt → Metadaten an ERP (POST /documents, 201) → im E-Dossier verlinkt
+Archivierung: im ERP erstellt → vom DMS geholt (GET …/content) → im DMS archiviert
+              → dmsReference zurückgeschrieben (PATCH) → optional aus ERP entfernt (DELETE)
+Löschung:     DELETE /documents/{uuid} → heute physisch gelöscht (204), kein Tombstone
 ```
 
-> Löschen wird über `DELETE` als **Soft-Delete** umgesetzt (siehe
-> [Konventionen](../3-referenz/2-konventionen.md#löschungen)). Ob Dokumente einen expliziten Status tragen
-> und ob Ersetzen/Versionierung unterstützt wird, ist noch offen und wird ergänzt.
+> Die endgültige Löschsemantik wird mit dem Feedback der ersten Partner festgelegt (siehe
+> [Konventionen → Löschungen](../3-referenz/2-konventionen.md#löschungen)). Ob Dokumente einen expliziten
+> Status tragen und ob Ersetzen/Versionierung unterstützt wird, ist ebenfalls noch offen.
 
 Begriffsdefinitionen im [Glossar](2-glossar.md).
