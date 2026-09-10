@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Holt die generierte OpenAPI-Spec, normalisiert sie deterministisch und schreibt YAML.
 
-Quelle ist entweder eine URL (z. B. die Dev-Instanz `/swagger/v1/swagger.json`) oder eine
-lokale Datei. Die Transformation ist bewusst deterministisch, damit `git diff` nur bei
+Quelle ist das Export-JSON aus dem Polaris-main-Build (`openapi/dms-api.v1.json`, von der
+Azure-Pipeline auf den Branch `sync/openapi` gepusht) oder – für lokale Versuche – eine URL. Die Transformation ist bewusst deterministisch, damit `git diff` nur bei
 echten Inhaltsänderungen anschlägt:
 
   * CRLF -> LF normalisieren,
   * doppelte Operation-`tags` deduplizieren (der Generator gibt "DMS" doppelt aus),
-  * festen `servers`-Block (Prod/Test/Dev) injizieren – wird NICHT aus der Quelle übernommen,
+  * `info.x-generated-at` entfernen (sha + build-nummer identifizieren den Build; der Zeitstempel
+    würde jeden Sync zu einem Diff machen – das Roh-JSON behält ihn),
+  * festen `servers`-Block (nur Test) injizieren – wird NICHT aus der Quelle übernommen; Prod wird
+    bewusst nicht publiziert, die URL erhalten Partner beim Onboarding (#21140),
   * als YAML mit Block-Skalaren ausgeben.
 
 Aufruf:  python scripts/sync-openapi.py <quelle-url-oder-datei> <ausgabe.yaml>
@@ -19,9 +22,10 @@ import urllib.request
 
 import yaml
 
-# Fester servers-Block. Die Basis-URLs sind je Umgebung; der Generator liefert keine servers.
+# Fester servers-Block: nur die Test-Umgebung (Partner-Sandbox). Der Generator liefert keine servers,
+# Prod wird nicht publiziert (#21140). Muss zu den Basis-URLs in docs/3-referenz/1-authentifizierung.md passen.
 SERVERS = [
-    {"url": "https://erp-test.wwimmo.ch", "description": "Test"},
+    {"url": "https://erp-test.wwimmo.net", "description": "Test"},
 ]
 
 
@@ -82,6 +86,7 @@ def main():
 
     spec = normalize(load_source(source))
     dedupe_operation_tags(spec)
+    spec.get("info", {}).pop("x-generated-at", None)
     spec = inject_servers(spec)
 
     yaml.add_representer(str, _str_representer)
