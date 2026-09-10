@@ -20,6 +20,14 @@ script:pre-request {
   }
 }
 
+script:post-response {
+  if (res.status === 200 && res.body.items && res.body.items.length > 0) {
+    bru.setVar("accountId", res.body.items[0].id);
+  }
+}
+
 docs {
-  Delta-Abruf der Konten.
+  Liste der Konten. Das Zeitfenster wird angenommen, aber nicht angewendet: die Antwort ist
+  immer der volle Bestand. Erste ID wird als {{accountId}} gespeichert (Eingabe für
+  'Rechnung erstellen').
 }

@@ -1,0 +1,30 @@
+meta {
+  name: Archiv-Referenz zurueckschreiben
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/documents/{{archiveDocumentId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "dmsReference": { "archive": "{{archiveId}}", "documentId": "DMS-2026-0002" }
+  }
+}
+
+docs {
+  Ablauf 'Dokument archivieren' (ERP → DMS), letzter Schritt: meldet dem ERP, wo das
+  Dokument im DMS liegt. PATCH ist eine Teilaktualisierung – links und storageTargets
+  bleiben unverändert (ein PUT mit nur dmsReference würde sie leeren). Optional den ETag
+  aus 'Dokument nach UUID' als If-Match-Header mitsenden: 412 statt Überschreiben, wenn
+  sich das Dokument zwischenzeitlich geändert hat. Danach erscheint das Dokument nicht
+  mehr in 'Zu archivierende Dokumente'.
+}

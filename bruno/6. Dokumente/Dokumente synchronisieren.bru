@@ -1,11 +1,11 @@
 meta {
-  name: Auftraege synchronisieren
+  name: Dokumente synchronisieren
   type: http
-  seq: 15
+  seq: 1
 }
 
 get {
-  url: {{baseUrl}}/orders?changed_since={{lastSyncTime}}&changed_until=2030-01-01T00:00:00Z
+  url: {{baseUrl}}/documents?changed_since={{lastSyncTime}}
   body: none
   auth: bearer
 }
@@ -22,10 +22,11 @@ script:pre-request {
 
 script:post-response {
   if (res.status === 200 && res.body.items && res.body.items.length > 0) {
-    bru.setVar("orderId", res.body.items[0].id);
+    bru.setVar("documentId", res.body.items[0].id);
   }
 }
 
 docs {
-  Delta-Abruf der Aufträge. Erste ID wird als {{orderId}} gespeichert.
+  Delta-Abruf der Dokumente (paginiert, Link-Header mit next). Erste ID wird als
+  {{documentId}} gespeichert. Ohne changed_since liefert der Endpunkt den Vollbestand.
 }
