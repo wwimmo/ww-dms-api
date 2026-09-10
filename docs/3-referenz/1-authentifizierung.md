@@ -35,8 +35,31 @@ Die Antwort ist ein JSON-Objekt mit dem Token und seiner Gültigkeit:
 }
 ```
 
-Der Endpunkt ist auf **30 Anfragen/Minute pro IP** begrenzt – speichern Sie das Token zwischen und
-verwenden Sie es bis `expiresAt` wieder.
+`expiresIn` (Sekunden) und `expiresAt` (UTC) stammen vom Identity-Provider. Verwenden Sie diese Werte,
+statt eine feste Gültigkeit anzunehmen, und erneuern Sie das Token kurz vor `expiresAt`. Der Endpunkt ist
+auf **30 Anfragen/Minute pro IP** begrenzt – ein Token pro Ablaufzeitraum genügt.
+
+### Fehler am Token-Endpunkt
+
+Der Token-Endpunkt antwortet nicht im Problem-Format, sondern mit einem einfachen Objekt
+(`application/json`):
+
+| Status | Body | Was tun |
+| --- | --- | --- |
+| `401` | `{ "error": "invalid_client", "message": "Authentication failed. Verify your client_id and client_secret." }` | Zugangsdaten prüfen; nicht wiederholen. |
+| `502` | `{ "error": "service_unavailable", "message": "Authentication service is temporarily unavailable. Please try again later." }` | Mit Backoff wiederholen. |
+| `429` | siehe [Konventionen → Rate-Limits](2-konventionen.md#rate-limits) | `Retry-After` abwarten. |
+
+## Was das Token enthält
+
+| Claim | Bedeutung |
+| --- | --- |
+| `scopes` | Muss `wwimmo:dms:api` enthalten, sonst `403` auf allen Endpunkten. |
+| `customerid` | Ihr Mandant. Alle Daten-Endpunkte verlangen ihn (`403` ohne); die Daten sind darüber automatisch auf Ihren Mandanten eingeschränkt. Einzige Ausnahme ist `GET /info`, das ohne `customerid` antwortet und sich deshalb als Token-Test eignet. |
+| `erp` | Optional, `it2` oder `rimo`. Wirkt nur auf `POST /invoices`: welche Kontierungsregeln gelten. Ohne Claim gelten die ImmoTop2-Regeln. |
+
+Das Rate-Limit authentifizierter Aufrufe wird pro `client_id` gezählt – ein anderer Partner kann Ihr
+Kontingent nicht aufbrauchen.
 
 ## Token verwenden
 
@@ -49,14 +72,27 @@ Authorization: Bearer <token>
 
 ## Basis-URLs
 
-| Umgebung | Basis-URL |
-| --- | --- |
-| Test | `https://erp-test.wwimmo.ch` |
+| Umgebung | Basis-URL | Zweck |
+| --- | --- | --- |
+| Test | `https://erp-test.wwimmo.net` | Sandbox für die Integration: eigener Test-Mandant, eigene Zugangsdaten, echte Endpunkte. |
 
-Alle Pfade beginnen mit `/api/v1/dms`, z. B. `https://erp-test.wwimmo.ch/api/v1/dms/token`. Die
-**Produktions-URL** erhalten Sie beim Onboarding.
+Alle Pfade beginnen mit `/api/v1/dms`, z. B. `https://erp-test.wwimmo.net/api/v1/dms/token`. Die
+**Produktions-URL** erhalten Sie beim Onboarding. Die Swagger UI auf GitHub Pages zeigt ebenfalls auf
+Test (siehe [README → Anzeigen](../../README.md#anzeigen)).
 
-## Offen
+## Zugangsdaten erhalten (Kontakt aufnehmen)
 
-- Das **Verfahren zur Ausgabe von `client_id`/`client_secret`** (Onboarding, Rotation) wird noch
-  beschrieben.
+`client_id` und `client_secret` werden **pro DMS-Anbieter und Kunde (Mandant)** von W&W Immo ausgestellt.
+Sie sind an den Mandanten (`customerid`) und an den Scope gebunden und gelten je Umgebung getrennt.
+
+Wenden Sie sich an **`<Kontaktadresse folgt>`** und nennen Sie:
+
+- Ihr Produkt und Ihren Ansprechpartner,
+- den Kunden bzw. Mandanten, den Sie anbinden,
+- die Umgebung (Test oder Produktion).
+
+Sie erhalten die Zugangsdaten über einen sicheren Kanal, die Produktions-URL sowie die Archiv-ID Ihrer
+DMS-Anbindung (`dmsReference.archive`, siehe [Konventionen](2-konventionen.md#teilaktualisierung-patch-statt-put)).
+
+> **Follow-up:** Das Verfahren zur Ausgabe und Rotation der Zugangsdaten wird hier beschrieben, sobald es
+> festgelegt ist. Bis dahin gilt der Kontaktweg.

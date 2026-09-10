@@ -12,14 +12,10 @@ Fachliche und Validierungsfehler werden als `application/problem+json` zurückge
   "title": "some title for the error situation",
   "status": 400,
   "detail": "a human-readable explanation specific to this occurrence",
-  "instance": "/some/uri-reference#specific-occurrence-context"
+  "instance": "/some/uri-reference#specific-occurrence-context",
+  "traceId": "00-…"
 }
 ```
-
-Zwei Sonderfälle weichen vom Problem-Format ab und liefern ein einfacheres JSON-Objekt:
-
-- **`429 Too Many Requests`** (Rate-Limit): `{ "error": "...", "message": "...", "retryAfter": <sek> }`.
-- **Token-Endpunkt** (`/token`) bei Fehlern: `{ "error": "...", "message": "..." }`.
 
 | Feld | Bedeutung |
 | --- | --- |
@@ -28,22 +24,55 @@ Zwei Sonderfälle weichen vom Problem-Format ab und liefern ein einfacheres JSON
 | `status` | Der HTTP-Statuscode, im Body wiederholt. |
 | `detail` | Vorfallspezifische, englische Erklärung zur Eingrenzung des Problems. |
 | `instance` | URI-Referenz, die diesen konkreten Vorfall identifiziert. |
+| `traceId` | Korrelations-ID des Aufrufs – bei Support-Anfragen mitgeben. |
+| `errors` | Nur bei Eingabefehlern: Feld → Liste der Meldungen. |
 
 `title` und `detail` sind für Entwickler gedacht und **nicht** geeignet, um sie Endnutzern unverändert
 anzuzeigen.
+
+## Drei Ausnahmen vom Problem-Format
+
+Prüfen Sie den `Content-Type` der Antwort, bevor Sie parsen:
+
+1. **`429 Too Many Requests`** (`application/json`):
+   `{ "error": "Too many requests", "message": "Rate limit exceeded. Please try again later.", "retryAfter": <sekunden|null> }`
+   mit den Headern `Retry-After`, `X-RateLimit-Remaining: 0`, `X-RateLimit-Reset`.
+2. **Token-Endpunkt** `POST /token` (`application/json`): `401` `{ "error": "invalid_client", "message": … }`,
+   `502` `{ "error": "service_unavailable", "message": … }`.
+3. **`POST /invoices` – fachliche Validierung** (`application/json`):
+
+   ```json
+   {
+     "isValid": false,
+     "errors": [
+       { "field": "Accountings", "code": "AMOUNT_MISMATCH", "message": "…" },
+       { "field": "Accountings[0].Text", "code": "REQUIRED", "message": "…" }
+     ]
+   }
+   ```
+
+   Die `code`-Werte (z. B. `REQUIRED`, `AMOUNT_MISMATCH`, `QR_IBAN_REQUIRES_REFERENCE`, `INVALID_IBAN`,
+   `DUE_DATE_BEFORE_DATE`, `COST_CENTER_REQUIRED`) sind der Vertrag des ERP-Rechnungsworkflows und stabil –
+   Ihr System kann darauf verzweigen und dem Sachbearbeiter eine Korrektur anbieten. Ein fehlendes Feld
+   und ein Feld mit `null` antworten beide `REQUIRED`; ein nicht lesbarer Wert (falscher Typ, keine UUID)
+   antwortet `INVALID_FORMAT` auf diesem Feld. Mehrere Fehler kommen gesammelt zurück.
+
+   Daneben gibt es am selben Endpunkt ein **strukturelles `400` im Problem-Format**, etwa bei leerem
+   `invoices`-Array (`detail: "At least one invoice is required."`).
 
 ## Reaktion auf Fehler
 
 | Status | Wahrscheinliche Ursache | Was tun |
 | --- | --- | --- |
-| `400` | Validierungsproblem in der Anfrage (z. B. ungültiger `changed_since`, ungültiger `type`/`entity-type`, ungültige Seitengrösse, `links` mit unbekannter ID). | `detail` prüfen, Anfrage korrigieren; nicht unverändert wiederholen. |
-| `401` | Token fehlt/abgelaufen. | Neues Token anfordern (siehe [Authentifizierung](1-authentifizierung.md)); einmal wiederholen. |
-| `403` | Token hat den Scope `wwimmo:dms:api` nicht bzw. keinen `customerid`-Bezug. | Zugangsdaten/Scope prüfen – nicht blind wiederholen. |
-| `404` | Unbekannte ID / unbekannter Schlüssel. | Als „nicht vorhanden" behandeln; nicht wiederholen. |
-| `409` | Konflikt mit dem aktuellen Zustand (z. B. eine bereits verbuchte Rechnung löschen). | Nicht wiederholen; fachlich klären. |
+| `400` | Validierungsproblem in der Anfrage: ungültiges Zeitfenster (`Invalid time range`), ungültige Paginierung (`Invalid pagination parameter`), ungültiger `type`/`entity-type`/`storageTargets`-Wert, `links` mit unbekannter ID, `dmsReference` ohne `documentId` oder mit falschem `archive`; bei `POST /invoices` zusätzlich die Validierungsliste (oben). | `detail` bzw. `errors` prüfen, Anfrage korrigieren; nicht unverändert wiederholen. |
+| `401` | Token fehlt oder ist abgelaufen; am Token-Endpunkt: falsche Zugangsdaten (`invalid_client`). | Neues Token anfordern (siehe [Authentifizierung](1-authentifizierung.md)) und einmal wiederholen; bei `invalid_client` Zugangsdaten prüfen, nicht wiederholen. |
+| `403` | Token hat den Scope `wwimmo:dms:api` nicht oder trägt keinen `customerid`. | Zugangsdaten/Scope prüfen – nicht blind wiederholen. |
+| `404` | Unbekannte ID / unbekannter Schlüssel. | Als «nicht vorhanden» behandeln; nicht wiederholen. |
+| `405` | `DELETE /invoices/{uuid}` – ein Storno ist nicht verfügbar. | Korrektur im ERP; siehe [Konventionen → Löschungen](2-konventionen.md#löschungen). |
 | `412` | Mitgesendetes `If-Match` benennt nicht den aktuellen Stand – das Dokument wurde zwischenzeitlich geändert. | Neu lesen, Änderung erneut anwenden, mit dem aktuellen `ETag` wiederholen. Siehe [Konventionen](2-konventionen.md#schreiben-mit-if-match). |
 | `429` | Rate-Limit. | Zurückhalten; `Retry-After` beachten. Siehe [Konventionen](2-konventionen.md#rate-limits). |
 | `502` | Vorgelagerter Dienst nicht erreichbar (z. B. beim Token-Bezug). | Mit Backoff wiederholen. |
+| `503` | `GET /health` bei ungesundem Dienst (Body mit `status` und `details`). | Wie `5xx` behandeln. |
 | `5xx` | Serverseitig. | Mit Backoff wiederholen. **Achtung:** schreibende Aufrufe sind nicht idempotent – nach einem Timeout erst per `GET` prüfen, ob der erste Versuch angekommen ist (siehe [Konventionen](2-konventionen.md#idempotenz)). |
 
 ## Retry-Strategie
