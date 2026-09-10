@@ -92,10 +92,15 @@ def check_doc_endpoints(operations: dict[str, set[str]], errors: list[str]) -> N
             if raw in ("/", "") or raw.startswith("/api/") and not raw.startswith(PREFIX):
                 continue
             path = normalize(raw)
-            where = f"{file.relative_to(ROOT)}:{line_of(text, match.start())}"
+            line_no = line_of(text, match.start())
+            where = f"{file.relative_to(ROOT)}:{line_no}"
             if path not in operations:
                 errors.append(f"{where}: Endpunkt `{method.upper()} {raw}` existiert nicht in der Spezifikation")
             elif method not in operations[path]:
+                # Eine bewusst nicht angebotene Methode darf dokumentiert sein, wenn dieselbe Zeile das
+                # `405` nennt (z. B. «DELETE /invoices/{uuid} antwortet 405»).
+                if "405" in text.splitlines()[line_no - 1]:
+                    continue
                 errors.append(f"{where}: `{method.upper()} {raw}` – Methode nicht in der Spezifikation "
                               f"(erlaubt: {', '.join(sorted(m.upper() for m in operations[path]))})")
 
