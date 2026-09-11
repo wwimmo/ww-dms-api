@@ -69,11 +69,13 @@ Prüfen Sie den `Content-Type` der Antwort, bevor Sie parsen:
 | `403` | Token hat den Scope `wwimmo:dms:api` nicht oder trägt keinen `customerid`. | Zugangsdaten/Scope prüfen – nicht blind wiederholen. |
 | `404` | Unbekannte ID / unbekannter Schlüssel. | Als «nicht vorhanden» behandeln; nicht wiederholen. |
 | `405` | `DELETE /invoices/{uuid}` – ein Storno ist nicht verfügbar. | Korrektur im ERP; siehe [Konventionen → Löschungen](2-konventionen.md#löschungen). |
+| `409` | `POST /invoices` mit einem `Idempotency-Key`, dessen erster Aufruf noch läuft. | `Retry-After` (1 s) abwarten und denselben Aufruf unverändert wiederholen; dann kommt die gespeicherte Antwort. Siehe [Konventionen → Idempotenz](2-konventionen.md#idempotenz). |
 | `412` | Mitgesendetes `If-Match` benennt nicht den aktuellen Stand – das Dokument wurde zwischenzeitlich geändert. | Neu lesen, Änderung erneut anwenden, mit dem aktuellen `ETag` wiederholen. Siehe [Konventionen](2-konventionen.md#schreiben-mit-if-match). |
+| `422` | `POST /invoices` mit einem bereits verwendeten `Idempotency-Key`, aber anderem Body. | Für einen neuen Vorgang einen neuen Schlüssel verwenden; nicht denselben Schlüssel mit geändertem Body wiederholen. |
 | `429` | Rate-Limit. | Zurückhalten; `Retry-After` beachten. Siehe [Konventionen](2-konventionen.md#rate-limits). |
 | `502` | Vorgelagerter Dienst nicht erreichbar (z. B. beim Token-Bezug). | Mit Backoff wiederholen. |
 | `503` | `GET /health` bei ungesundem Dienst (Body mit `status` und `details`). | Wie `5xx` behandeln. |
-| `5xx` | Serverseitig. | Mit Backoff wiederholen. **Achtung:** schreibende Aufrufe sind nicht idempotent – nach einem Timeout erst per `GET` prüfen, ob der erste Versuch angekommen ist (siehe [Konventionen](2-konventionen.md#idempotenz)). |
+| `5xx` | Serverseitig. | Mit Backoff wiederholen. `POST /invoices` dabei mit demselben `Idempotency-Key` – so entsteht höchstens eine Rechnung. **Achtung bei `POST /documents`:** kein Schlüssel; nach einem Timeout erst per `GET` prüfen, ob der erste Versuch angekommen ist (siehe [Konventionen](2-konventionen.md#idempotenz)). |
 
 ## Retry-Strategie
 
