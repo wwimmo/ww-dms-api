@@ -28,4 +28,7 @@ docs {
   Credentials, Scope wwimmo:dms:api) und speichert es als {{token}} für alle weiteren
   Anfragen. Tragen Sie zuerst baseUrl, clientId und clientSecret in der Umgebung ein.
   Begrenzt auf 30 Anfragen/Minute pro IP. Diese Anfrage zuerst ausführen.
+  Das Token gilt bis expiresAt aus der Antwort (keine feste Laufzeit annehmen);
+  401 { error: "invalid_client" } bei falschen Zugangsdaten, 502 wenn der
+  Identity-Provider nicht erreichbar ist.
 }

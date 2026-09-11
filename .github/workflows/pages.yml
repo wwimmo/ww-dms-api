@@ -1,21 +1,21 @@
 name: Pages
 
-# Veröffentlicht die OpenAPI-Referenz (Swagger UI) auf GitHub Pages.
-# Voraussetzung: GitHub Pages aktiviert (Settings → Pages → Source "GitHub Actions").
-# Pages braucht ein öffentliches Repo bzw. einen Team/Enterprise-Plan.
+# Veröffentlicht die OpenAPI-Referenz auf GitHub Pages: Swagger UI (index.html, lädt
+# dms-api.v1.yaml, servers = Test), die Spezifikation als YAML und JSON sowie die eigenständige
+# Offline-Datei dms-api-swagger.html (Spec und UI inline, läuft per Doppelklick).
 #
-# Solange Pages noch nicht aktiv ist, läuft dieser Workflow NUR manuell
-# (workflow_dispatch), damit auf `main` keine fehlschlagenden Deploys entstehen.
-# Sobald das Repo öffentlich ist und Pages aktiviert wurde, den Push-Trigger
-# wieder einkommentieren:
-#
-#   push:
-#     branches: [main]
-#     paths:
-#       - openapi/**
-#       - .github/workflows/pages.yml
+# Pages braucht ein öffentliches Repo und Settings → Pages → Source "GitHub Actions". Bis das
+# geschaltet ist, überspringt der Job über die Repository-Variable PAGES_ENABLED (Settings →
+# Secrets and variables → Actions → Variables, Wert "true"), damit auf main keine roten Deploys
+# entstehen. Danach läuft er bei jedem Merge, der die Spezifikation oder die Skripte berührt.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - openapi/**
+      - scripts/build-swagger-html.sh
+      - .github/workflows/pages.yml
   workflow_dispatch:
 
 permissions:
@@ -29,16 +29,18 @@ concurrency:
 
 jobs:
   deploy:
+    if: vars.PAGES_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Offline-Swagger-UI bauen
+        run: scripts/build-swagger-html.sh openapi/dms-api.v1.yaml openapi/dms-api-swagger.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          # Die Swagger-UI-Seite (index.html) und die Spezifikation liegen in openapi/.
           path: ./openapi
       - id: deployment
         uses: actions/deploy-pages@v4

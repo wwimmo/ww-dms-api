@@ -1,0 +1,6078 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "DMS API",
+    "description": "REST API for the Document Management System (DMS).\n\n## Rate Limiting\n\nAll DMS endpoints are rate-limited. Two policies apply depending on authentication:\n\n| Policy | Algorithm | Default Limit | Queue |\n|--------|-----------|---------------|-------|\n| Anonymous (e.g. /token, /health) | Fixed Window | 30 req/min per IP | 2 |\n| Authenticated (data endpoints) | Token Bucket | 100 burst, 50 req/min per client | 5 |\n\nWhen rate-limited, the API returns **HTTP 429** (\"Rate limit exceeded\") with a `Retry-After`\nheader (seconds). Limits are configurable via the `RateLimiting:Dms` configuration section.\n\n## Retry Strategy\n\nConsumers **should** implement Exponential Backoff with jitter:\n1. Wait for `Retry-After` seconds (or 1s if absent).\n2. On repeated 429s, double the delay: 1s → 2s → 4s → 8s.\n3. Add ±25% random jitter to avoid thundering-herd effects.\n4. Abort after 5 retries (~30s total).\n\n## Delta Queries\n\nList endpoints take an optional UTC window: `changed_since` (default: no lower bound → full\nload) and `changed_until` (default: no upper bound). Sending `changed_since` alone is the\nnormal polling pattern. `changed_since` after `changed_until` is rejected with **400**.\n\nThe following endpoints accept the window but **cannot apply it** — their ERP source carries no\nchange timestamps, so every call returns the full set: `/accounts`, `/account-cost-centers`,\n`/cost-centers`, `/creditors`, `/payment-accounts`, `/payoutbankaccounts`, `/vat-codes`,\n`/accountings-history`. Poll these on a slower schedule and diff locally.\n\nDeletions are not published: a removed document or master-data record simply stops appearing.\nThere are no tombstones and no webhooks — every consumer polls.\n\n## Error Format\n\nErrors use problem details (`type`, `title`, `status`, `detail`, `traceId`); field-level\nvalidation adds an `errors` map. The one exception is invoice validation\n(`POST /invoices`), which returns `{ \"isValid\": false, \"errors\": [{ field, code, message }] }`\nso callers can branch on stable codes such as `AMOUNT_MISMATCH` or `QR_IBAN_REQUIRES_REFERENCE`.",
+    "version": "v1",
+    "x-build-sha": "074f7bb1ce1e43655de16ad891f53bacfe02c2e1",
+    "x-build-number": "20260911.1",
+    "x-generated-at": "2026-09-11T09:25:48.3889490+00:00"
+  },
+  "paths": {
+    "/api/v1/dms/accounts": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Lists all accounts; the delta window is accepted but not applied.",
+        "description": "The delta window is accepted for contract symmetry but not applied: the ERP source of this list\r\ncarries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff\r\nlocally instead of relying on `changed_since`.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Creates an account in the ERP and returns it with its id.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/account-cost-centers": {
+      "get": {
+        "tags": [
+          "AccountCostCenter"
+        ],
+        "summary": "Lists all account-to-cost-center assignments; the delta window is accepted but not applied.",
+        "description": "The delta window is accepted for contract symmetry but not applied: the ERP source of this list\r\ncarries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff\r\nlocally instead of relying on `changed_since`.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountCostCenterResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountCostCenterResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountCostCenterResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/accountings-history": {
+      "get": {
+        "tags": [
+          "AccountingHistory"
+        ],
+        "summary": "Lists the accounting history (past booking lines); the delta window is accepted but not applied.",
+        "description": "The delta window is accepted for contract symmetry but not applied: the ERP source of this list\r\ncarries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff\r\nlocally instead of relying on `changed_since`.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountingHistoryResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountingHistoryResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountingHistoryResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/appliances": {
+      "get": {
+        "tags": [
+          "Appliance"
+        ],
+        "summary": "Lists appliances changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplianceResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplianceResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplianceResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/bookkeepings": {
+      "get": {
+        "tags": [
+          "Bookkeeping"
+        ],
+        "summary": "Lists bookkeepings changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookkeepingResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookkeepingResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookkeepingResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/bookkeepings/{uuid}": {
+      "get": {
+        "tags": [
+          "Bookkeeping"
+        ],
+        "summary": "Reads a single bookkeeping.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookkeepingResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookkeepingResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookkeepingResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/cost-centers": {
+      "get": {
+        "tags": [
+          "CostCenter"
+        ],
+        "summary": "Lists all cost centers (ImmoTop2 only); the delta window is accepted but not applied.",
+        "description": "The delta window is accepted for contract symmetry but not applied: the ERP source of this list\r\ncarries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff\r\nlocally instead of relying on `changed_since`.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostCenterResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostCenterResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostCenterResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/creditors": {
+      "get": {
+        "tags": [
+          "Creditor"
+        ],
+        "summary": "Lists creditors changed in the given window, paginated.",
+        "description": "The delta window is forwarded to the ERP, which filters at the source (the ImmoTop2 DMS API accepts\r\n`changed_since`/`changed_until` on all financial domains). Partners can therefore poll with\r\ntheir stored watermark. Pagination still happens in memory because the provider returns the window\r\nas one list.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditorResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditorResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditorResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Creditor"
+        ],
+        "summary": "Creates a creditor in the ERP and returns it with its id.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditorRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditorRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditorRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditorResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/creditors/{uuid}": {
+      "get": {
+        "tags": [
+          "Creditor"
+        ],
+        "summary": "Reads a single creditor.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditorResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditorResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/documents": {
+      "get": {
+        "tags": [
+          "Document"
+        ],
+        "summary": "Lists documents changed in the given window, newest data first.",
+        "description": "Add the flag `requires_dms_archiving` (no value needed) to get only documents that still\r\nneed archiving, i.e. `storageTargets` contains `DMS` and `dmsReference` is unset.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Document"
+        ],
+        "summary": "Archives a document in the ERP and returns the id to store on the DMS side.",
+        "description": "Links must point at existing Stammdaten of the calling customer (`realestate`, `house`,\r\n`unit`, `appliance`, `tenant`, `tenancy`); an unknown id is rejected with 400.\r\nA retry after a timeout creates a second document — there is no idempotency key yet.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/documents/{uuid}": {
+      "get": {
+        "tags": [
+          "Document"
+        ],
+        "summary": "Reads a single document. Sends an `ETag`; honours `If-None-Match` with 304.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Document"
+        ],
+        "summary": "Replaces a document completely.",
+        "description": "This is a full replacement: properties missing from the body are cleared, so `links` and\r\n`storageTargets` have to be sent along. To change single properties — the archiving hand-back\r\nin particular — use `PATCH`. Send `If-Match` with the document's ETag to be told (412)\r\ninstead of overwriting a version you have not seen.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Client Error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Document"
+        ],
+        "summary": "Updates single properties of a document; omitted properties stay as they are.",
+        "description": "Partial update: omitted properties keep their stored value. This is the endpoint for the DMS\r\narchiving hand-back (`{ \"dmsReference\": { … } }`) — unlike `PUT`, which replaces the whole\r\ndocument and therefore clears `links` and `storageTargets` when they are not sent along.\r\nAn explicit `null` also means \"unchanged\"; clearing a field is done with `PUT`.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentPatchRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentPatchRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentPatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Client Error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Document"
+        ],
+        "summary": "Deletes a document in the ERP. Honours `If-Match`.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Client Error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/documents/{uuid}/content": {
+      "get": {
+        "tags": [
+          "Document"
+        ],
+        "summary": "Downloads the file, with the stored MIME type and file name.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Returns the current DMS service health. Publicly accessible for monitoring.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Server Error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/houses": {
+      "get": {
+        "tags": [
+          "House"
+        ],
+        "summary": "Lists houses changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/info": {
+      "get": {
+        "tags": [
+          "Info"
+        ],
+        "summary": "Returns service information including the authenticated caller's identity.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/invoices": {
+      "get": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Lists invoices changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Hands an invoice to the KrediFlow visa workflow. The file content stays in the DMS.",
+        "description": "`fileId` names a previously archived document (`POST /documents`); only the id travels, never\r\n            the file. Validation errors come back as <c>{ \"isValid\": false, \"errors\": [{ \"field\", \"code\",\r\n            \"message\" }] }</c> — a different shape from the problem-details used elsewhere, because the codes are\r\n            the ERP's contract. A retry after a timeout creates a second invoice; there is no idempotency key yet.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceCreateResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceCreateResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceCreateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/invoices/{uuid}": {
+      "get": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Reads a single invoice with its accountings.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/orders": {
+      "get": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Lists orders changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/orders/{uuid}": {
+      "get": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Reads a single order.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/payment-accounts": {
+      "get": {
+        "tags": [
+          "PaymentAccount"
+        ],
+        "summary": "Lists all creditor payment accounts; the delta window is accepted but not applied.",
+        "description": "The delta window is accepted for contract symmetry but not applied: the ERP source of this list\r\ncarries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff\r\nlocally instead of relying on `changed_since`.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentAccountResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentAccountResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentAccountResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/payoutbankaccounts": {
+      "get": {
+        "tags": [
+          "PayoutBankAccount"
+        ],
+        "summary": "Lists all payout bank accounts; the delta window is accepted but not applied.",
+        "description": "The delta window is accepted for contract symmetry but not applied: the ERP source of this list\r\ncarries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff\r\nlocally instead of relying on `changed_since`.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutBankAccountResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutBankAccountResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutBankAccountResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/payoutbankaccountbookkeepings": {
+      "get": {
+        "tags": [
+          "PayoutBankAccountBookkeeping"
+        ],
+        "summary": "Lists payout-bank-account-to-bookkeeping links changed in the given window, optionally filtered by either side.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "payoutbankaccountid",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bookkeepingid",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutBankAccountBookkeepingResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutBankAccountBookkeepingResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutBankAccountBookkeepingResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/persons": {
+      "get": {
+        "tags": [
+          "Person"
+        ],
+        "summary": "Lists persons changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/portfolios": {
+      "get": {
+        "tags": [
+          "Portfolio"
+        ],
+        "summary": "Lists portfolios changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/portfolios/{uuid}": {
+      "get": {
+        "tags": [
+          "Portfolio"
+        ],
+        "summary": "Reads a single portfolio. Sends an `ETag`; honours `If-None-Match` with 304.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioResponse"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/realestates": {
+      "get": {
+        "tags": [
+          "Realestate"
+        ],
+        "summary": "Lists realestates changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestateResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestateResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestateResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/realestates/{uuid}": {
+      "get": {
+        "tags": [
+          "Realestate"
+        ],
+        "summary": "Reads a single realestate. Sends an `ETag`; honours `If-None-Match` with 304.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestateResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestateResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestateResponse"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/realestates/number:{number}": {
+      "get": {
+        "tags": [
+          "Realestate"
+        ],
+        "summary": "Reads a realestate by its ERP number (`number:{number}`).",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestateResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestateResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestateResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/realestate-persons": {
+      "get": {
+        "tags": [
+          "RealestatePerson"
+        ],
+        "summary": "Lists realestate-to-person assignments (with role) changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestatePersonResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestatePersonResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealestatePersonResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/tenancies": {
+      "get": {
+        "tags": [
+          "Tenancy"
+        ],
+        "summary": "Lists tenancies changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenancyResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenancyResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenancyResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/tenancies/{uuid}": {
+      "get": {
+        "tags": [
+          "Tenancy"
+        ],
+        "summary": "Reads a single tenancy.",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenancyResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenancyResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenancyResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/tenancy-persons": {
+      "get": {
+        "tags": [
+          "TenancyPerson"
+        ],
+        "summary": "Lists tenancy-to-person assignments (with role) changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenancyPersonResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenancyPersonResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenancyPersonResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/tenants": {
+      "get": {
+        "tags": [
+          "Tenant"
+        ],
+        "summary": "Lists tenants changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/token": {
+      "post": {
+        "tags": [
+          "Token"
+        ],
+        "summary": "Exchanges client credentials for a Cidaas access token.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCredentialsTokenRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCredentialsTokenRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCredentialsTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Server Error"
+          }
+        }
+      }
+    },
+    "/api/v1/dms/units": {
+      "get": {
+        "tags": [
+          "Unit"
+        ],
+        "summary": "Lists units changed in the given window, paginated.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dms/vat-codes": {
+      "get": {
+        "tags": [
+          "VatCode"
+        ],
+        "summary": "Lists all VAT codes; the delta window is accepted but not applied.",
+        "description": "The delta window is accepted for contract symmetry but not applied: the ERP source of this list\r\ncarries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff\r\nlocally instead of relying on `changed_since`.",
+        "parameters": [
+          {
+            "name": "changed_since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "changed_until",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/VatCodeResponsePaginatedResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VatCodeResponsePaginatedResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VatCodeResponsePaginatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountCostCenterResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "costcenterid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "validfrom": {
+            "type": "string",
+            "nullable": true
+          },
+          "validto": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for an ERP account-cost center assignment\r\n            (Konti-Kostenstellen-Zuweisung; frozen wire contract for the external DMS consumer)."
+      },
+      "AccountCostCenterResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountCostCenterResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "AccountRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "number": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "validfrom": {
+            "type": "string",
+            "nullable": true
+          },
+          "validto": {
+            "type": "string",
+            "nullable": true
+          },
+          "bookkeepingid": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantid": {
+            "type": "string",
+            "nullable": true
+          },
+          "requirescostcenter": {
+            "type": "boolean"
+          },
+          "requiresquantitiy": {
+            "type": "boolean"
+          },
+          "unitofmeasure": {
+            "$ref": "#/components/schemas/UnitOfMeasure"
+          },
+          "vatconfig": {
+            "$ref": "#/components/schemas/VatConfig"
+          },
+          "defaultvatcodeid": {
+            "type": "string",
+            "nullable": true
+          },
+          "extracostdate": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request contract for creating an ERP account. JSON keys pinned to the published contract."
+      },
+      "AccountResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "number": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "validfrom": {
+            "type": "string",
+            "nullable": true
+          },
+          "validto": {
+            "type": "string",
+            "nullable": true
+          },
+          "bookkeepingid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "requirescostcenter": {
+            "type": "boolean"
+          },
+          "requiresquantitiy": {
+            "type": "boolean"
+          },
+          "unitofmeasure": {
+            "$ref": "#/components/schemas/UnitOfMeasure"
+          },
+          "vatconfig": {
+            "$ref": "#/components/schemas/VatConfig"
+          },
+          "defaultvatcodeid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "extracostdate": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for an ERP account (Konto/Zahlstelle) — frozen wire contract for the external DMS consumer."
+      },
+      "AccountResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "AccountType": {
+        "enum": [
+          "Cost",
+          "Debtor",
+          "GeneralLedger",
+          "Cooperative"
+        ],
+        "type": "string",
+        "description": "Account type (Kontotyp) exposed on the DMS wire as a speaking enum instead of the raw ERP code.\r\nBacked by cred enumeration key 855 (`cred.accounttype`). The numeric code stays in the DB/ERP\r\nand is mapped to/from this enum in the DMS UseCases layer only (#22269).\r\nMembers and codes mirror the mobile.wiki page \"cred enumerations\" (page 394), the source of truth."
+      },
+      "AccountingHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "creditorid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookkeepingid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountnumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "text": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a single accounting history entry (Kontierungshistorie) from the ERP (frozen wire contract for the external DMS consumer)."
+      },
+      "AccountingHistoryResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountingHistoryResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "ApplianceResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "manufacturer": {
+            "type": "string",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          },
+          "serialnumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "unitid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "realestateid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for an appliance (frozen wire contract for the external DMS consumer)."
+      },
+      "ApplianceResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApplianceResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "BookkeepingResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "portfolioid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "realestateid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "erpref": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for an ERP bookkeeping unit (Buchhaltungseinheit) — the central\r\n            booking-circle anchor in the cred_polaris schema (frozen wire contract for the external DMS consumer)."
+      },
+      "BookkeepingResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookkeepingResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "CallerInfo": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Type of caller: \"User\" for user tokens, \"M2M\" for machine-to-machine tokens.",
+            "nullable": true
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject claim (sub) - present in user tokens.",
+            "nullable": true
+          },
+          "clientId": {
+            "type": "string",
+            "description": "Client ID - present in M2M tokens (client_id or azp claim).",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "description": "Email claim - may be present in user tokens.",
+            "nullable": true
+          },
+          "customerId": {
+            "type": "string",
+            "description": "Customer ID claim - used for multi-tenant isolation.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Information about the authenticated caller extracted from the JWT token."
+      },
+      "ClientCredentialsTokenRequest": {
+        "required": [
+          "client_id",
+          "client_secret"
+        ],
+        "type": "object",
+        "properties": {
+          "client_id": {
+            "minLength": 1,
+            "type": "string",
+            "description": "The client ID of the Cidaas application."
+          },
+          "client_secret": {
+            "minLength": 1,
+            "type": "string",
+            "description": "The client secret of the Cidaas application."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request contract for exchanging client credentials for a DMS API access token.\r\nThe client_id and client_secret are obtained from the Cidaas identity provider\r\nwhen a non-interactive application is created for a customer.\r\nJSON property names and validation attributes are mirrored verbatim from the legacy contract."
+      },
+      "CostCenterResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "short": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for an ERP cost center (frozen wire contract for the external DMS consumer)."
+      },
+      "CostCenterResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CostCenterResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "CreditorRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name of the creditor.",
+            "nullable": true
+          },
+          "number": {
+            "type": "integer",
+            "description": "Human-readable creditor number (nullable).",
+            "format": "int32",
+            "nullable": true
+          },
+          "personid": {
+            "type": "string",
+            "description": "FK to the person carrying name/address/contact details.",
+            "format": "uuid"
+          },
+          "vatuid": {
+            "type": "string",
+            "description": "VAT UID of the creditor (e.g. \"CHE-123.456.789 MWST\", max 28 chars, nullable).",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request contract for creating an ERP creditor (Polaris, wiki 2476). Name/address/contact details are\r\nmanaged on the linked person (WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorRequest.Personid), not on the creditor."
+      },
+      "CreditorResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Universal unique identifier of the creditor.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the creditor.",
+            "nullable": true
+          },
+          "number": {
+            "type": "integer",
+            "description": "Human-readable creditor number (nullable).",
+            "format": "int32",
+            "nullable": true
+          },
+          "personid": {
+            "type": "string",
+            "description": "FK to the person with name/address/contact details (resolve via /persons).",
+            "format": "uuid"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Whether the creditor is active in the ERP (E-006)."
+          },
+          "vatuid": {
+            "type": "string",
+            "description": "VAT UID of the creditor (e.g. \"CHE-123.456.789 MWST\", max 28 chars).",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a creditor (frozen wire contract for the external DMS consumer)."
+      },
+      "CreditorResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreditorResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "DmsReferenceRequest": {
+        "type": "object",
+        "properties": {
+          "archive": {
+            "type": "string",
+            "nullable": true
+          },
+          "documentId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS archive reference in a request."
+      },
+      "DmsReferenceResponse": {
+        "type": "object",
+        "properties": {
+          "archive": {
+            "type": "string",
+            "nullable": true
+          },
+          "documentId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS archive reference (set after archiving)."
+      },
+      "DocumentLinkRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entity-type": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Link between a document and a master-data entity in a request."
+      },
+      "DocumentLinkResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entity-type": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Link between a document and a master-data entity."
+      },
+      "DocumentPatchRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "filedate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "mime-type": {
+            "type": "string",
+            "nullable": true
+          },
+          "extention": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true
+          },
+          "storageTargets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "dmsReference": {
+            "$ref": "#/components/schemas/DmsReferenceRequest"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentLinkRequest"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Partial-update contract for an ERP document. Every property is optional and an omitted property\r\nleaves the stored value untouched — the archiving hand-back the DMS concept describes\r\n(`{ \"dmsReference\": { … } }`) is exactly this shape.\r\n            \r\nDeviation from RFC 7396 worth knowing: an explicit `null` also means \"unchanged\", it does not\r\nclear the field. Clearing `links`, `storageTargets`, `url` or `barcode` stays the\r\njob of `PUT`, which replaces the whole document. That keeps the dangerous operation explicit:\r\na partner who only wants to report an archive reference cannot accidentally drop the links."
+      },
+      "DocumentRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "filedate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "mime-type": {
+            "type": "string",
+            "nullable": true
+          },
+          "extention": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true
+          },
+          "storageTargets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "dmsReference": {
+            "$ref": "#/components/schemas/DmsReferenceRequest"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentLinkRequest"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request contract for creating or updating an ERP document."
+      },
+      "DocumentResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "filedate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "mime-type": {
+            "type": "string",
+            "nullable": true
+          },
+          "extention": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true
+          },
+          "storageTargets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "dmsReference": {
+            "$ref": "#/components/schemas/DmsReferenceResponse"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentLinkResponse"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response for a single ERP document (frozen wire contract for the external DMS consumer)."
+      },
+      "DocumentResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocumentResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Overall health status of the DMS service.",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "When the health check ran (UTC).",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string",
+            "description": "DMS API version.",
+            "nullable": true
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Per-dependency health details.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response contract for the DMS health endpoint. Part of the module's public surface."
+      },
+      "HouseResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "string",
+            "nullable": true
+          },
+          "street": {
+            "type": "string",
+            "nullable": true
+          },
+          "zip": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "housenumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "egid": {
+            "type": "string",
+            "nullable": true
+          },
+          "realestateid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a house (frozen wire contract for the external DMS consumer)."
+      },
+      "HouseResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HouseResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "InfoResponse": {
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string",
+            "description": "Name of the service.",
+            "nullable": true
+          },
+          "version": {
+            "type": "string",
+            "description": "Assembly version of the DMS service.",
+            "nullable": true
+          },
+          "apiVersion": {
+            "type": "string",
+            "description": "API version being used.",
+            "nullable": true
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Timestamp when the request was processed.",
+            "format": "date-time"
+          },
+          "caller": {
+            "$ref": "#/components/schemas/CallerInfo"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response contract for the authenticated DMS info endpoint. Part of the module's public surface;\r\nshape mirrored verbatim from the legacy `InfoResponse`."
+      },
+      "InvoiceAccountingData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "accountid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "costcenterid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "extracostdate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "vatdate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "text": {
+            "type": "string",
+            "nullable": true
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "netamount": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "vatcode": {
+            "type": "string",
+            "nullable": true
+          },
+          "vatcodeid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "vatrate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "vatamount": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "vatproportion": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "unitofmeasure": {
+            "$ref": "#/components/schemas/UnitOfMeasure"
+          },
+          "quantity": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "realestateid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "unitid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "applianceid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "InvoiceAccountingResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "accountid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "costcenterid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "extracostdate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "vatdate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "text": {
+            "type": "string",
+            "nullable": true
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "netamount": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "vatcode": {
+            "type": "string",
+            "nullable": true
+          },
+          "vatcodeid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "vatrate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "vatamount": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "vatproportion": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "unitofmeasure": {
+            "$ref": "#/components/schemas/UnitOfMeasure"
+          },
+          "quantity": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "realestateid": {
+            "type": "string",
+            "description": "Realestate of this booking line. Deliberate, documented deviation from E-010 (#22903):\r\nIT2 bookings within one bookkeeping can span multiple realestates, and the E-021\r\nvisa-finding reads the first realestate of the accountings.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "unitid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "applianceid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Accounting line item embedded in an invoice response."
+      },
+      "InvoiceCreateResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "integer",
+            "description": "Running invoice number assigned by KrediFlow; null if not yet assigned.",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response for a successful `POST /invoices`. Surfaces only the identifiers KrediFlow\r\nassigns on creation — the invoice id and the running number — since the KrediFlow create\r\nendpoint returns just those, not the full invoice (#22537). Use `GET /invoices/{id}`\r\nto read the full invoice back."
+      },
+      "InvoiceCreditorData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "name1": {
+            "type": "string",
+            "nullable": true
+          },
+          "street": {
+            "type": "string",
+            "nullable": true
+          },
+          "zip": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "legal": {
+            "type": "boolean"
+          },
+          "phonebusiness": {
+            "type": "string",
+            "nullable": true
+          },
+          "phoneprivate": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "InvoiceCreditorResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "name1": {
+            "type": "string",
+            "nullable": true
+          },
+          "street": {
+            "type": "string",
+            "nullable": true
+          },
+          "zip": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "legal": {
+            "type": "boolean"
+          },
+          "phonebusiness": {
+            "type": "string",
+            "nullable": true
+          },
+          "phoneprivate": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Creditor information embedded in an invoice response (creditorinfo)."
+      },
+      "InvoiceData": {
+        "type": "object",
+        "properties": {
+          "invoicenumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/InvoiceType"
+          },
+          "fullysighted": {
+            "type": "string",
+            "nullable": true
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "duedate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "creditor": {
+            "$ref": "#/components/schemas/InvoiceCreditorData"
+          },
+          "orderid": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentaccountid": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentinfo": {
+            "$ref": "#/components/schemas/PaymentInfoData"
+          },
+          "bookkeepingid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitid": {
+            "type": "string",
+            "nullable": true
+          },
+          "payoutbankaccountid": {
+            "type": "string",
+            "nullable": true
+          },
+          "fileId": {
+            "type": "string",
+            "description": "UUID of the already-archived document (DMS file id). Only the id is passed\r\nthrough to the ERP — the file content itself is never transferred (#21919).",
+            "format": "uuid"
+          },
+          "dmsReference": {
+            "$ref": "#/components/schemas/DmsReferenceRequest"
+          },
+          "accountings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceAccountingData"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "InvoiceFileResponse": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "filedate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "mimetype": {
+            "type": "string",
+            "nullable": true
+          },
+          "extension": {
+            "type": "string",
+            "nullable": true
+          },
+          "linkarchive": {
+            "type": "string",
+            "nullable": true
+          },
+          "linkid": {
+            "type": "string",
+            "nullable": true
+          },
+          "dmsReference": {
+            "$ref": "#/components/schemas/DmsReferenceResponse"
+          },
+          "hash": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "File/document reference embedded in an invoice response."
+      },
+      "InvoicePaymentInfoResponse": {
+        "type": "object",
+        "properties": {
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "reference": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Payment information embedded in an invoice response (paymentinfo)."
+      },
+      "InvoiceRequest": {
+        "type": "object",
+        "properties": {
+          "invoices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceWrapper"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request model for submitting an invoice upload to the DMS API.\r\nPlain wire DTO — the ErpInvoice mapping lives in the Application layer.\r\nThe handler consumes `Invoices[0].Invoice`."
+      },
+      "InvoiceResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invoicenumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/InvoiceType"
+          },
+          "fullysighted": {
+            "type": "boolean"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "duedate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "paiddate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "bookkeepingid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitid": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentaccountid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "payoutbankaccountid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "existingfileid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderid": {
+            "type": "string",
+            "nullable": true
+          },
+          "incidentid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/InvoiceStatus"
+          },
+          "state": {
+            "$ref": "#/components/schemas/InvoiceState"
+          },
+          "rejectedcomment": {
+            "type": "string",
+            "nullable": true
+          },
+          "erperrorcode": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "erperrortext": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentpurpose": {
+            "type": "string",
+            "nullable": true
+          },
+          "errormessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "creditor": {
+            "$ref": "#/components/schemas/InvoiceCreditorResponse"
+          },
+          "paymentinfo": {
+            "$ref": "#/components/schemas/InvoicePaymentInfoResponse"
+          },
+          "file": {
+            "$ref": "#/components/schemas/InvoiceFileResponse"
+          },
+          "accountings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceAccountingResponse"
+            },
+            "nullable": true
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Full-readback response model for an invoice in the DMS API (Polaris).\r\nSurfaces the complete invoice shape incl. nested creditor / payment-info / file\r\n/ accountings, plus the Polaris workflow-reflow fields (state, paiddate,\r\nrejected/error info, paymentpurpose) and the bookkeeping anchor.\r\nFrozen wire contract for the external DMS consumer."
+      },
+      "InvoiceResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "InvoiceState": {
+        "enum": [
+          "New",
+          "AssignRealestate",
+          "AssignWorkflowUsers",
+          "RestartAfterRejected",
+          "ReadyForVisa",
+          "Visa1Approved",
+          "Visa2Approved",
+          "Visa3Approved",
+          "FullySighted",
+          "SentToErp",
+          "ImportedInErp",
+          "Paid",
+          "Rejected",
+          "Cancelled"
+        ],
+        "type": "string",
+        "description": "Invoice workflow state (Status der Rechnung) exposed on the DMS wire as a speaking enum instead of the\r\nraw ERP code. Backed by cred enumeration key 880 (`cred.invoicestate`). The numeric code stays in\r\nthe DB/ERP and is mapped to/from this enum in the DMS UseCases layer only (#22269).\r\nMembers and codes mirror the mobile.wiki page \"cred enumerations\" (page 394), the source of truth.\r\nDistinct from the coarse WWImmo.Polaris.Dms.Endpoints.Invoices.InvoiceStatus (Pending/Approved/Rejected) already on\r\nthe invoice contract."
+      },
+      "InvoiceStatus": {
+        "enum": [
+          "Pending",
+          "Approved",
+          "Rejected"
+        ],
+        "type": "string",
+        "description": "Invoice processing status in the KrediFlow visa workflow. Mirrored in the Contracts layer (the\r\nfrozen wire enum) so the published contract stays free of the KrediFlow assembly; the Application\r\nlayer maps from the KrediFlow status. Serialized as a string (legacy wire shape)."
+      },
+      "InvoiceType": {
+        "enum": [
+          "Invoice",
+          "Credit"
+        ],
+        "type": "string",
+        "description": "Invoice type (Typ der Rechnung) exposed on the DMS wire as a speaking enum instead of the raw ERP code.\r\nBacked by cred enumeration key 885 (`cred.invoicetype`). The numeric code stays in the DB/ERP and\r\nis mapped to/from this enum in the DMS UseCases layer only (#22269).\r\nMembers and codes mirror the mobile.wiki page \"cred enumerations\" (page 394), the source of truth."
+      },
+      "InvoiceWrapper": {
+        "type": "object",
+        "properties": {
+          "invoice": {
+            "$ref": "#/components/schemas/InvoiceData"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrderMlResponse": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string",
+            "description": "ISO 639-1 two-letter language code.",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "description": "Optional order title in this language.",
+            "nullable": true
+          },
+          "instruction": {
+            "type": "string",
+            "description": "The work order text sent to the contractor.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Per-language texts of a work order (from `ticket.orders_mls`)."
+      },
+      "OrderResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Universal unique identifier of the order.",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "integer",
+            "description": "Human-readable order number.",
+            "format": "int32"
+          },
+          "date": {
+            "type": "string",
+            "description": "Order date.",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "integer",
+            "description": "State of the order (enumeration, default 0 = new).",
+            "format": "int32"
+          },
+          "contractorid": {
+            "type": "string",
+            "description": "FK to the contractor person (resolve via /persons), nullable.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "incidentid": {
+            "type": "string",
+            "description": "FK to the ticket this order belongs to (mandatory) — the ticket and\r\n            its master-data references are reachable transitively through it.",
+            "format": "uuid"
+          },
+          "realestateid": {
+            "type": "string",
+            "description": "Realestate reference, flattened from the order's ticket. Null when\r\n            the ticket hangs on another master-data entity (house/unit/tenant/appliance).",
+            "format": "uuid",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "description": "Human-readable label: the ticket's title (German preferred,\r\n            falls back to the first available language).",
+            "nullable": true
+          },
+          "mls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderMlResponse"
+            },
+            "description": "The order's own per-language texts (title optional, instruction = work order text).",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a work order (Auftrag) from the Ticketing subdomain\r\n(ADR-016 Silber-Scope; frozen wire contract for the external DMS consumer)."
+      },
+      "OrderResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "PaymentAccountResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "creditorid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/PaymentAccountType"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a payment account (frozen wire contract for the external DMS consumer)."
+      },
+      "PaymentAccountResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentAccountResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "PaymentAccountType": {
+        "enum": [
+          "QrIbanWithQrReference",
+          "IbanWithoutReference",
+          "IbanWithScor"
+        ],
+        "type": "string",
+        "description": "Payment account type (Typ der Zahlstelle) exposed on the DMS wire as a speaking enum instead of the raw\r\nERP code. Backed by cred enumeration key 850 (`cred.paymentaccounttypes`). The numeric code stays\r\nin the DB/ERP and is mapped to/from this enum in the DMS UseCases layer only (#22269).\r\nMembers and codes mirror the mobile.wiki page \"cred enumerations\" (page 394), the source of truth."
+      },
+      "PaymentInfoData": {
+        "type": "object",
+        "properties": {
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "reference": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "PayoutBankAccountBookkeepingResponse": {
+        "type": "object",
+        "properties": {
+          "payoutbankaccountid": {
+            "type": "string",
+            "description": "UUID of the linked payout account.",
+            "format": "uuid"
+          },
+          "bookkeepingid": {
+            "type": "string",
+            "description": "UUID of the linked bookkeeping unit.",
+            "format": "uuid"
+          },
+          "default": {
+            "type": "boolean",
+            "description": "Whether this payout account is the default for the linked bookkeeping.\r\nSerialized as `default` on the wire (C# reserved word, so the C# property is `IsDefault`)."
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a payout-account-to-bookkeeping link (frozen wire contract for the\r\nexternal DMS consumer). ERP/Order data sourced via the KrediFlow provider — not Stammdaten.\r\n            \r\nReplaces the legacy direct `payoutbankaccounts.realestateid` relationship with an explicit\r\nM:N link (E-005). The `default` flag lives on the link itself, so the same payout account can\r\nbe the default for one bookkeeping and not another."
+      },
+      "PayoutBankAccountBookkeepingResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayoutBankAccountBookkeepingResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "PayoutBankAccountResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for an ERP payout bank account (Auszahlverbindung) — frozen wire contract for the external DMS consumer."
+      },
+      "PayoutBankAccountResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PayoutBankAccountResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "PersonResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updated": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "legal": {
+            "type": "boolean"
+          },
+          "gender": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name1": {
+            "type": "string",
+            "nullable": true
+          },
+          "name2": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "mobile": {
+            "type": "string",
+            "nullable": true
+          },
+          "phoneprivate": {
+            "type": "string",
+            "nullable": true
+          },
+          "phonebusiness": {
+            "type": "string",
+            "nullable": true
+          },
+          "street": {
+            "type": "string",
+            "nullable": true
+          },
+          "housenumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "zip": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a person (frozen wire contract for the external DMS consumer).\r\nAddress fields reflect the most recent address (by validfrom) for the person. JSON keys are pinned\r\nall-lowercase to match the published contract regardless of serializer naming policy."
+      },
+      "PersonResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "PortfolioResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ownerid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a portfolio (frozen wire contract for the external DMS consumer)."
+      },
+      "PortfolioResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PortfolioResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": { }
+      },
+      "RealestatePersonResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updated": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "realestateid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "personid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a realestate person (frozen wire contract; JSON keys pinned all-lowercase)."
+      },
+      "RealestatePersonResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RealestatePersonResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "RealestateResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "number": {
+            "type": "string",
+            "nullable": true
+          },
+          "condominium": {
+            "type": "boolean"
+          },
+          "managementid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "portfolioid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "managedfrom": {
+            "type": "string",
+            "description": "Start of the management period (Verwaltungsperiode) of this realestate, if any (#22270).",
+            "format": "date",
+            "nullable": true
+          },
+          "managedto": {
+            "type": "string",
+            "description": "End of the management period (Verwaltungsperiode) of this realestate, if any (#22270).",
+            "format": "date",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a realestate (frozen wire contract for the external DMS consumer)."
+      },
+      "RealestateResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RealestateResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "TenancyPersonResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updated": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "realestateid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "personid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenancyid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a tenancy person (frozen wire contract; JSON keys pinned all-lowercase)."
+      },
+      "TenancyPersonResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TenancyPersonResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "TenancyResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "realestateid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "leasestart": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "leaseend": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "movein": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "moveout": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a tenancy (frozen wire contract for the external DMS consumer)."
+      },
+      "TenancyResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TenancyResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "TenantResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a tenant (frozen wire contract for the external DMS consumer)."
+      },
+      "TenantResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TenantResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The generated JWT token.",
+            "nullable": true
+          },
+          "tokenType": {
+            "type": "string",
+            "description": "Token type (always \"Bearer\").",
+            "nullable": true
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "Token expiry time in seconds.",
+            "format": "int32"
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "When the token expires.",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response contract returned by both the Cidaas token proxy and the dev token generator.\r\nFrozen wire shape mirrored verbatim from the legacy `TokenResponse`."
+      },
+      "UnitOfMeasure": {
+        "enum": [
+          "Liter",
+          "KWh",
+          "Kg",
+          "M3",
+          "Ton",
+          "NotApplicable"
+        ],
+        "type": "string",
+        "description": "Unit of measure (Mengeneinheit) exposed on the DMS wire as a speaking enum instead of the raw ERP code.\r\nBacked by cred enumeration key 860 (`cred.unitofmeasure`). The numeric code stays in the DB/ERP\r\nand is mapped to/from this enum in the DMS UseCases layer only (#22269).\r\nMembers and codes mirror the mobile.wiki page \"cred enumerations\" (page 394), the source of truth."
+      },
+      "UnitResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "floor": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "rooms": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "houseid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "realestateid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a unit (frozen wire contract for the external DMS consumer)."
+      },
+      "UnitResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnitResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "VatCodeResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "short": {
+            "type": "string",
+            "nullable": true
+          },
+          "bookkeepingid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "vatratetype": {
+            "$ref": "#/components/schemas/VatRateType"
+          },
+          "proportionally": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DMS REST response shape for a VAT code (MWST-Code) sourced from the ERP (frozen wire contract for the external DMS consumer)."
+      },
+      "VatCodeResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VatCodeResponse"
+            },
+            "nullable": true
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "description": "Total number of pages for the current page size.",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Paginated REST envelope returned by the DMS BFF to its external consumer."
+      },
+      "VatConfig": {
+        "enum": [
+          "WithoutVat",
+          "AllowsVat",
+          "RequiresVat",
+          "OnlyDefaultVatCode"
+        ],
+        "type": "string",
+        "description": "VAT configuration of an account (MWST-Einstellung) exposed on the DMS wire as a speaking enum instead\r\nof the raw ERP code. Backed by cred enumeration key 865 (`cred.vatconfig`). The numeric code stays\r\nin the DB/ERP and is mapped to/from this enum in the DMS UseCases layer only (#22269).\r\nMembers and codes mirror the mobile.wiki page \"cred enumerations\" (page 394), the source of truth."
+      },
+      "VatRateType": {
+        "enum": [
+          "NormalRate",
+          "ReducedRate",
+          "SpecialRate",
+          "NoVat"
+        ],
+        "type": "string",
+        "description": "VAT rate type of a VAT code (MWST-Satzart) exposed on the DMS wire as a speaking enum instead of the raw\r\nERP code. Backed by cred enumeration key 870 (`cred.vatratetype`). The numeric code stays in the\r\nDB/ERP and is mapped to/from this enum in the DMS UseCases layer only (#22269).\r\nMembers and codes mirror the mobile.wiki page \"cred enumerations\" (page 394), the source of truth."
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "Enter your JWT token (without 'Bearer ' prefix)",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "Bearer": [ ]
+    }
+  ]
+}

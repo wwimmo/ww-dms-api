@@ -15,9 +15,11 @@ E-Rechnung.
 1. **Benötigte Stammdaten aktualisieren** (abrufen, nicht annehmen, dass sie aktuell sind):
 
    ```
-   GET /realestates?changed_since=<letzter-abgleich>&changed_until=<jetzt>
-   GET /units?changed_since=<letzter-abgleich>&changed_until=<jetzt>
+   GET /realestates?changed_since=<letzter-abgleich>
+   GET /units?changed_since=<letzter-abgleich>
    ```
+
+   Die Antworten sind paginiert – dem `next` im `Link`-Header folgen.
 
 2. **Dokument im ERP anlegen** – mit Metadaten und Verknüpfungen, ohne Dateiinhalt:
 
@@ -32,13 +34,22 @@ E-Rechnung.
      "extention": ".pdf",
      "filedate": "2026-01-15T10:00:00Z",
      "storageTargets": ["DMS"],
+     "dmsReference": { "archive": "<archiv-uuid ihrer anbindung>", "documentId": "<dms-dokument-id>" },
      "links": [
        { "id": "<liegenschaft-uuid>", "entity-type": "realestate" },
        { "id": "<objekt-uuid>", "entity-type": "unit" }
      ]
    }
    ```
-   Die Antwort enthält das angelegte Dokument inkl. `id`. Das ERP verlinkt es im E-Dossier.
+
+   Antwort `201 Created` mit dem angelegten Dokument im Body und `Location: /api/v1/dms/documents/{id}`.
+   Die `id` merken – sie ist der Bezug für spätere Änderungen und für den Rechnungsimport. Das ERP verlinkt
+   das Dokument im E-Dossier.
+
+   Fehler `400` (Problem-Format) mit sprechendem `detail`, z. B. `Invalid document type: 'rechnung'. Must be
+   one of: invoice, credit, correspondence, assurance`, `Invalid storage target: 'cloud'`,
+   `Invalid entity type: 'person'`, `Unknown realestate link target(s): …` oder
+   `dmsReference.documentId is required when dmsReference is set.`
 
 3. **Dokument aktualisieren**, falls sich etwas ändert (z. B. weitere Verknüpfungen, neuer Name):
 
@@ -50,7 +61,9 @@ E-Rechnung.
    vollständig und leert dabei nicht mitgesendete Eigenschaften – siehe
    [Konventionen](../3-referenz/2-konventionen.md#teilaktualisierung-patch-statt-put).
 
-   Ein nicht mehr benötigtes Dokument lässt sich mit `DELETE /documents/{id}` löschen (Antwort `204`).
+   Ein nicht mehr benötigtes Dokument lässt sich mit `DELETE /documents/{id}` löschen (`204`). Die Löschung
+   ist heute **physisch**: das Dokument taucht danach in keinem Abruf mehr auf – siehe
+   [Konventionen → Löschungen](../3-referenz/2-konventionen.md#löschungen).
 
 ## Ablauf
 
@@ -64,7 +77,7 @@ sequenceDiagram
   DMS->>DMS: Dokument neu (abgelegt & indexiert)
   DMS->>+API: POST /documents
   API->>ERP: Datei anlegen
-  API-->>-DMS: { id: "..." }
+  API-->>-DMS: 201 + Location, Dokument { id, ... }
   DMS->>+API: PATCH /documents/{id}
   API->>ERP: Datei aktualisieren
   API-->>-DMS: 200
@@ -73,8 +86,14 @@ sequenceDiagram
 ## Hinweise
 
 - `links[].entity-type` (gültige Werte, Gross-/Kleinschreibung egal): `realestate`, `house`, `unit`,
-  `appliance`, `tenant`, `tenancy`.
-- `type` (gültige Werte): `invoice`, `credit`, `correspondence`, `assurance`.
-- `storageTargets` (gültige Werte): `DMS`, `ERP`.
+  `appliance`, `tenant`, `tenancy`. Die IDs müssen Stammdaten **Ihres Mandanten** sein, sonst `400`.
+- `type` (gültige Werte, Gross-/Kleinschreibung egal): `invoice`, `credit`, `correspondence`, `assurance`.
+- `storageTargets` (gültige Werte, Gross-/Kleinschreibung egal): `DMS`, `ERP`.
+- `dmsReference` ist beim Import optional; wenn gesetzt, ist `documentId` Pflicht und `archive` muss die
+  Archiv-UUID Ihrer Anbindung sein (siehe
+  [Konventionen](../3-referenz/2-konventionen.md#teilaktualisierung-patch-statt-put)).
+- Ein Retry nach einem Timeout legt ein **zweites** Dokument an (kein Idempotenz-Schlüssel) – vorher per
+  `GET /documents?changed_since=…` prüfen.
 - Für Kreditorenrechnungen verwenden Sie stattdessen
   [Rechnung importieren](2-rechnung-importieren.md).
+- Ausführbares Beispiel: Bruno-Collection, Ordner *6. Dokumente* (`Dokument erstellen`).

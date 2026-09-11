@@ -1,12 +1,19 @@
 name: PR OpenAPI Preview
 
-# Baut bei jeder PR-Änderung an der Spezifikation eine eigenständige Swagger-UI-Datei
-# und hängt sie als Download-Artefakt an den PR. Macht nichts öffentlich.
+# Prüft jeden PR, der Spezifikation, Doku, Bruno-Collection oder Skripte berührt:
+# Redocly-Lint der Spezifikation, Abgleich der Prosa und der Bruno-Requests gegen die
+# Spezifikation (scripts/check-docs-against-spec.py) und eine eigenständige Swagger-UI-Datei
+# als Download-Artefakt. Macht nichts öffentlich.
 
 on:
   pull_request:
     paths:
       - openapi/**
+      - docs/**
+      - bruno/**
+      - README.md
+      - scripts/**
+      - redocly.yaml
       - .github/workflows/pr-openapi-preview.yml
 
 permissions:
@@ -19,35 +26,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: pip install pyyaml
+
+      - name: OpenAPI validieren (Redocly)
+        run: npx --yes @redocly/cli@2 lint
+
+      - name: Doku und Bruno-Collection gegen die Spezifikation prüfen
+        run: python scripts/check-docs-against-spec.py
+
       - name: Swagger-UI-Datei mit eingebetteter Spec bauen
-        run: |
-          npx --yes js-yaml@4 openapi/dms-api.v1.yaml > spec.json
-          cat > template.html <<'HTML'
-          <!doctype html>
-          <html lang="de">
-            <head>
-              <meta charset="utf-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1" />
-              <title>W&amp;W Immo DMS-API – Referenz</title>
-              <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
-              <style>body { margin: 0; }</style>
-            </head>
-            <body>
-              <div id="swagger-ui"></div>
-              <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" crossorigin></script>
-              <script>
-                window.onload = () => {
-                  window.ui = SwaggerUIBundle({ spec: __SPEC__, dom_id: '#swagger-ui', deepLinking: true });
-                };
-              </script>
-            </body>
-          </html>
-          HTML
-          python3 - <<'PY'
-          html = open('template.html', encoding='utf-8').read()
-          spec = open('spec.json', encoding='utf-8').read()
-          open('dms-api-swagger.html', 'w', encoding='utf-8').write(html.replace('__SPEC__', spec))
-          PY
+        run: scripts/build-swagger-html.sh openapi/dms-api.v1.yaml dms-api-swagger.html
 
       - uses: actions/upload-artifact@v4
         with:
@@ -69,7 +60,7 @@ jobs:
               `**So ansehen:** [Workflow-Run öffnen](${runUrl}) → unten unter **Artifacts** ` +
               '`dms-api-swagger` herunterladen → ZIP entpacken → `dms-api-swagger.html` im Browser öffnen.',
               '',
-              '_Wird bei jeder Änderung an `openapi/` neu gebaut._',
+              '_Wird bei jeder Änderung an `openapi/`, `docs/`, `bruno/` oder den Skripten neu gebaut._',
             ].join('\n');
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number,

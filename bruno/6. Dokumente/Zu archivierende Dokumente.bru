@@ -1,0 +1,34 @@
+meta {
+  name: Zu archivierende Dokumente
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/documents?changed_since={{lastSyncTime}}&requires_dms_archiving
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+script:pre-request {
+  if (!bru.getVar("lastSyncTime")) {
+    bru.setVar("lastSyncTime", "2020-01-01T00:00:00Z");
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.items && res.body.items.length > 0) {
+    bru.setVar("archiveDocumentId", res.body.items[0].id);
+  }
+}
+
+docs {
+  Archivierungsaufträge (Ablauf 'Dokument archivieren'): das Flag requires_dms_archiving
+  (ohne Wert) liefert nur Dokumente mit DMS in storageTargets und ohne dmsReference.
+  Erste ID wird als {{archiveDocumentId}} gespeichert – Eingabe für 'Dokumentinhalt
+  herunterladen' und 'Archiv-Referenz zurueckschreiben'.
+}

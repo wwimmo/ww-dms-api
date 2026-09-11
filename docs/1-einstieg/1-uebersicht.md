@@ -32,12 +32,12 @@ Die schrittweisen Abläufe finden Sie in den [Anleitungen](../2-anleitungen/).
 ## Das Pull-/Polling-Modell
 
 Sie konsumieren die API ausschliesslich durch **Abrufen** – typischerweise
-`GET /documents?changed_since=<Zeitstempel>`. Daraus ergeben sich einige Regeln, die in den
+`GET /documents?changed_since=<Zeitstempel>` (paginiert, `Link`-Header). Daraus ergeben sich einige Regeln, die in den
 [Konventionen](../3-referenz/2-konventionen.md) beschrieben sind:
 
 - Jede Änderung trägt einen Zeitstempel, damit `changed_since` sie findet.
-- Wie Löschungen über das Polling sichtbar werden, wird derzeit erarbeitet – siehe
-  [Konventionen](../3-referenz/2-konventionen.md#löschungen).
+- Löschungen werden **nicht** signalisiert: ein gelöschtes Dokument fehlt einfach in späteren Abrufen
+  (kein Tombstone) – siehe [Konventionen](../3-referenz/2-konventionen.md#löschungen).
 - **Lesende** Abrufe sind beliebig wiederholbar. **Schreibende** Aufrufe sind es nicht: es gibt noch keinen
   Idempotenz-Schlüssel, eine Wiederholung nach einem Timeout legt einen zweiten Datensatz an – siehe
   [Konventionen](../3-referenz/2-konventionen.md#idempotenz).

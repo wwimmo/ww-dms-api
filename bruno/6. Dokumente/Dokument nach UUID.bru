@@ -1,0 +1,22 @@
+meta {
+  name: Dokument nach UUID
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/documents/{{documentId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Einzelnes Dokument per UUID. Die Antwort trägt einen ETag-Header: als If-None-Match
+  erneut senden ergibt 304 ohne Body, als If-Match bei PUT/PATCH/DELETE schützt er vor
+  dem Überschreiben eines zwischenzeitlich geänderten Stands (412). 404, wenn das
+  Dokument für Ihren Mandanten nicht sichtbar ist.
+}

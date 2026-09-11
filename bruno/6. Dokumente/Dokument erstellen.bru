@@ -1,0 +1,45 @@
+meta {
+  name: Dokument erstellen
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/documents
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Kreditorenrechnung Heizung Dezember",
+    "type": "invoice",
+    "mime-type": "application/pdf",
+    "extention": ".pdf",
+    "filedate": "2026-01-15T10:00:00Z",
+    "storageTargets": ["DMS"],
+    "dmsReference": { "archive": "{{archiveId}}", "documentId": "DMS-2026-0001" },
+    "links": [
+      { "id": "{{realestateId}}", "entity-type": "realestate" }
+    ]
+  }
+}
+
+script:post-response {
+  if (res.status === 201 && res.body && res.body.id) {
+    bru.setVar("documentId", res.body.id);
+  }
+}
+
+docs {
+  Ablauf 'Dokument importieren' (DMS → ERP): legt die Metadaten eines im DMS liegenden
+  Dokuments im ERP an, ohne Dateiinhalt. links[].id muss zu Stammdaten Ihres Mandanten
+  gehören ({{realestateId}} aus 'Liegenschaften synchronisieren'), sonst 400.
+  dmsReference.archive ist die Archiv-UUID Ihrer Anbindung ({{archiveId}} in der
+  Umgebung). Antwort 201 mit Location-Header; die ID wird als {{documentId}}
+  gespeichert und ist die fileId für 'Rechnung erstellen'.
+}

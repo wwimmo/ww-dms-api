@@ -16,18 +16,28 @@ auth:bearer {
 
 body:json {
   {
-    "version": "1.0.0",
-    "originsystem": "MeinDMS",
     "invoices": [
       {
         "invoice": {
           "invoicenumber": "INV-001",
-          "type": 1,
-          "date": "2026-01-15T00:00:00",
+          "type": "Invoice",
+          "date": "2026-01-15",
+          "duedate": "2026-02-14",
           "amount": 1260.90,
           "bookkeepingid": "{{bookkeepingId}}",
-          "fileId": "00000000-0000-0000-0000-000000000000",
-          "creditor": { "name1": "Beispiel Kreditor AG" }
+          "fileId": "{{documentId}}",
+          "creditor": { "id": "{{creditorId}}" },
+          "accountings": [
+            {
+              "id": "11111111-1111-1111-1111-111111111111",
+              "sort": 1,
+              "accountid": "{{accountId}}",
+              "date": "2026-01-15",
+              "text": "Heizungsservice Dezember",
+              "amount": 1260.90,
+              "unitofmeasure": "NotApplicable"
+            }
+          ]
         }
       }
     ]
@@ -41,9 +51,14 @@ script:post-response {
 }
 
 docs {
-  Erstellt eine Rechnung und startet den Freigabe-/Visumsworkflow im ERP.
-  `bookkeepingid` ist erforderlich (Buchungskreis-Anker; aus 'Buchungskreise
-  synchronisieren' beziehen oder UUID einsetzen). `fileId` ist erforderlich: die UUID
-  des bereits archivierten Dokuments — es wird nur die ID übergeben, nie der
-  Dateiinhalt. Die erzeugte ID wird als {{invoiceId}} gespeichert. Antwort: 201.
+  Importiert eine Rechnung ins ERP (kein Freigabeschritt über diese API). Die Hülle
+  invoices[].invoice ist Teil des Vertrags; verarbeitet wird genau eine Rechnung.
+  Pflicht: invoicenumber, type (Invoice|Credit), date (YYYY-MM-DD), amount,
+  bookkeepingid (aus 'Buchungskreise synchronisieren') und fileId – die UUID eines
+  bereits per POST /documents abgelegten Dokuments (aus '6. Dokumente / Dokument
+  erstellen'); es wird nur die ID übergeben, nie der Dateiinhalt. creditor mit id aus
+  'Kreditoren synchronisieren', accountid aus 'Konten synchronisieren'.
+  Antwort 201 { id, number } + Location; die ID wird als {{invoiceId}} gespeichert.
+  400 kommt in zwei Formen: Validierungsliste { isValid, errors[{field, code, message}] }
+  oder Problem-Format bei strukturellen Fehlern (siehe docs/3-referenz/3-fehler.md).
 }

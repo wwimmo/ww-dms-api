@@ -1,0 +1,152 @@
+name: OpenAPI sync PR
+
+# Zweite Hälfte der Kette Polaris-main-Build → Partner-Repo. Die Azure-Pipeline (Stage
+# PublishOpenApi) pusht das rohe Export-JSON als openapi/dms-api.v1.json auf den Bot-Branch
+# sync/openapi – nur wenn sich der Vertrag geändert hat, mit Provenienz in info.x-build-*.
+# Dieser Workflow leitet daraus das veröffentlichte YAML ab, lintet es, prüft die Prosa und die
+# Bruno-Collection gegen die neue Spezifikation, baut die Swagger-Vorschau, schreibt den
+# Changelog-Eintrag und öffnet bzw. aktualisiert den Review-PR. Kein Auto-Merge: ein Mensch
+# liest den Diff und den Changelog.
+#
+# Pushes und PRs mit GITHUB_TOKEN lösen keine weiteren Workflows aus. Das verhindert Rekursion,
+# heisst aber auch: pr-openapi-preview läuft für den Bot-PR nicht – deshalb lintet, prüft und
+# baut dieser Workflow selbst.
+
+on:
+  push:
+    branches: [sync/openapi]
+    paths: [openapi/dms-api.v1.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: openapi-sync
+  cancel-in-progress: true
+
+env:
+  OASDIFF_IMAGE: tufin/oasdiff:v1.31.0
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sync/openapi
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: pip install pyyaml
+
+      - name: YAML aus dem Build-Export ableiten
+        run: python scripts/sync-openapi.py openapi/dms-api.v1.json openapi/dms-api.v1.yaml
+
+      - name: Provenienz lesen
+        id: meta
+        run: |
+          echo "sha=$(jq -r '.info["x-build-sha"] // "unbekannt"' openapi/dms-api.v1.json)" >> "$GITHUB_OUTPUT"
+          echo "number=$(jq -r '.info["x-build-number"] // "unbekannt"' openapi/dms-api.v1.json)" >> "$GITHUB_OUTPUT"
+          echo "build_url=$(git log -1 --format=%B | sed -n 's/^Build: //p' | head -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Vertragsänderungen gegenüber main ermitteln (oasdiff)
+        id: diff
+        run: |
+          set -euo pipefail
+          git show origin/main:openapi/dms-api.v1.yaml > /tmp/base.yaml
+          docker run --rm -v "$PWD:/work" -v /tmp:/tmp "$OASDIFF_IMAGE" \
+            changelog /tmp/base.yaml /work/openapi/dms-api.v1.yaml -f markup > changelog.md || true
+          docker run --rm -v "$PWD:/work" -v /tmp:/tmp "$OASDIFF_IMAGE" \
+            breaking /tmp/base.yaml /work/openapi/dms-api.v1.yaml -f markup > breaking.md || true
+          if [ -s breaking.md ]; then echo "breaking=true" >> "$GITHUB_OUTPUT"; else echo "breaking=false" >> "$GITHUB_OUTPUT"; fi
+          [ -s changelog.md ] || echo "_Keine Vertragsänderung erkannt (nur Beschreibungen oder Provenienz)._" > changelog.md
+
+      - name: OpenAPI validieren (Redocly)
+        id: lint
+        continue-on-error: true
+        run: npx --yes @redocly/cli@2 lint
+
+      - name: Doku und Bruno-Collection gegen die Spezifikation prüfen
+        id: docs
+        continue-on-error: true
+        run: python scripts/check-docs-against-spec.py | tee docs-check.txt
+
+      - name: Swagger-UI-Datei bauen
+        run: scripts/build-swagger-html.sh openapi/dms-api.v1.yaml dms-api-swagger.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dms-api-swagger
+          path: dms-api-swagger.html
+
+      - name: Changelog-Eintrag schreiben
+        run: |
+          python3 - "${{ steps.meta.outputs.number }}" "${{ steps.meta.outputs.sha }}" <<'PY'
+          import datetime, pathlib, sys
+          number, sha = sys.argv[1:3]
+          path = pathlib.Path("CHANGELOG.md")
+          text = path.read_text(encoding="utf-8")
+          marker = f"Polaris-Build {number}"
+          if marker in text:
+              sys.exit(0)  # Branch wurde neu gepusht, Eintrag existiert schon
+          entry = (f"## {datetime.date.today().isoformat()} · {marker} (`{sha[:12]}`)\n\n"
+                   + pathlib.Path("changelog.md").read_text(encoding="utf-8").strip() + "\n\n")
+          head, sep, tail = text.partition("\n## ")
+          path.write_text(head + "\n" + entry + sep + tail if sep else text + "\n" + entry, encoding="utf-8")
+          PY
+
+      - name: YAML und Changelog committen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add openapi/dms-api.v1.yaml CHANGELOG.md
+          if git diff --cached --quiet; then echo "Nichts zu committen."; exit 0; fi
+          git commit -m "chore(openapi): yaml und changelog aus polaris-build ${{ steps.meta.outputs.number }} ableiten"
+          git push origin HEAD:sync/openapi
+
+      - name: PR öffnen oder aktualisieren
+        run: |
+          set -euo pipefail
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          LINT="✅ Redocly-Lint ohne Fehler"; [ "${{ steps.lint.outcome }}" = "success" ] || LINT="❌ Redocly-Lint fehlgeschlagen – siehe Run"
+          DOCS="✅ Doku und Bruno passen zur Spezifikation"; [ "${{ steps.docs.outcome }}" = "success" ] || DOCS="❌ Doku/Bruno widersprechen der Spezifikation – Befunde unten; im selben PR nachziehen"
+          BREAKING=""; [ "${{ steps.diff.outputs.breaking }}" = "true" ] && BREAKING=$'\n> ⚠️ **Breaking Change** laut oasdiff – Partner informieren, Deprecation-Regel im CHANGELOG beachten.\n'
+          TITLE="chore(openapi): spec aus polaris-build ${{ steps.meta.outputs.number }}"
+          {
+            echo "### DMS-API-Spezifikation aus Polaris-Build \`${{ steps.meta.outputs.number }}\`"
+            echo
+            echo "- Source-Commit: \`${{ steps.meta.outputs.sha }}\`"
+            echo "- Azure-Build: ${{ steps.meta.outputs.build_url || 'n/a' }}"
+            echo "- $LINT"
+            echo "- $DOCS"
+            echo "- Swagger-Vorschau: [Run]($RUN_URL) → Artifacts → \`dms-api-swagger\`"
+            echo "$BREAKING"
+            echo "### Vertragsänderungen (oasdiff gegen main)"
+            echo
+            cat changelog.md
+            if [ "${{ steps.docs.outcome }}" != "success" ]; then
+              echo; echo "### Befunde der Doku-Prüfung"; echo; echo '```'; cat docs-check.txt; echo '```'
+            fi
+            echo
+            echo "Bitte den Diff von \`openapi/dms-api.v1.yaml\` und den Changelog-Eintrag prüfen. Nach dem Merge veröffentlicht *Pages* die Referenz neu."
+          } > body.md
+          PR=$(gh pr list --head sync/openapi --base main --state open --json number --jq '.[0].number')
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --title "$TITLE" --body-file body.md
+          else
+            PR=$(gh pr create --head sync/openapi --base main --title "$TITLE" --body-file body.md --label openapi --label automated --json number --jq .number 2>/dev/null \
+              || gh pr create --head sync/openapi --base main --title "$TITLE" --body-file body.md | grep -oE '[0-9]+$')
+          fi
+          if [ "${{ steps.diff.outputs.breaking }}" = "true" ]; then gh pr edit "$PR" --add-label breaking || true; fi
+          echo "PR #$PR aktualisiert."
+
+      - name: Ergebnis
+        if: steps.lint.outcome != 'success' || steps.docs.outcome != 'success'
+        run: |
+          echo "Lint: ${{ steps.lint.outcome }}, Doku-Prüfung: ${{ steps.docs.outcome }} – der PR ist offen, der Run bleibt rot bis beides grün ist."
+          exit 1

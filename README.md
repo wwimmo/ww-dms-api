@@ -28,26 +28,35 @@ erfolgt über **Polling**: Ihr System ruft die API aktiv ab (Pull). Es gibt kein
 
 **1 – Einstieg**
 - [Übersicht](docs/1-einstieg/1-uebersicht.md) – was die API tut, die drei Kernabläufe, das Pull-Modell.
-- [Schnellstart](docs/1-einstieg/2-schnellstart.md) – Token holen und erste Abfrage. *(in Arbeit)*
+- [Schnellstart](docs/1-einstieg/2-schnellstart.md) – Erreichbarkeit, Token, erste Abfragen.
 
 **2 – Anleitungen**
 - [Dokument importieren](docs/2-anleitungen/1-dokument-importieren.md) – DMS → ERP.
-- [Rechnung importieren](docs/2-anleitungen/2-rechnung-importieren.md) – DMS → ERP → Freigabe.
+- [Rechnung importieren](docs/2-anleitungen/2-rechnung-importieren.md) – DMS → ERP zur Verbuchung.
 - [Dokument archivieren](docs/2-anleitungen/3-dokument-archivieren.md) – ERP → DMS.
 
 **3 – Referenz**
-- [OpenAPI-Referenz](#openapi-referenz) – Spezifikation, Abdeckung, Anzeige.
-- [Authentifizierung](docs/3-referenz/1-authentifizierung.md) – OAuth 2.0, Token, Scope.
-- [Konventionen](docs/3-referenz/2-konventionen.md) – Polling, `changed_since`, Idempotenz, Schlüssel.
-- [Fehlerbehandlung](docs/3-referenz/3-fehler.md) – Problem+JSON.
+- [OpenAPI-Referenz](#openapi-referenz) – Spezifikation, Abdeckung, Anzeige, Version.
+- [Authentifizierung](docs/3-referenz/1-authentifizierung.md) – OAuth 2.0, Token, Scope, Zugangsdaten.
+- [Konventionen](docs/3-referenz/2-konventionen.md) – Polling, `changed_since`, PATCH/PUT, Idempotenz, Löschungen.
+- [Fehlerbehandlung](docs/3-referenz/3-fehler.md) – Problem+JSON und die Ausnahmen.
 
 **4 – Konzepte**
 - [Domänenmodell](docs/4-konzepte/1-domaenenmodell.md) – Entitäten, Beziehungen, Lebenszyklus.
 - [Glossar](docs/4-konzepte/2-glossar.md) – Fachbegriffe.
 
-**Ausprobieren**
-- [Bruno-Collection](bruno/README.md) – einsatzbereite Beispiel-Requests für alle Endpunkte
-  (Token holen, Stammdaten, Finanzstammdaten, Buchungskreise, Rechnungen) zum direkten Testen.
+**Änderungen**
+- [CHANGELOG](CHANGELOG.md) – was sich wann am Vertrag geändert hat, inkl. Deprecation-Regel.
+
+## Ausprobieren
+
+- **Sandbox = Test-Umgebung** (`https://erp-test.wwimmo.net`): Sie erhalten einen eigenen Test-Mandanten
+  und eigene Zugangsdaten (siehe [Zugangsdaten erhalten](docs/3-referenz/1-authentifizierung.md#zugangsdaten-erhalten-kontakt-aufnehmen))
+  und arbeiten gegen echte Endpunkte. Auf Produktion gibt es bewusst keine Swagger UI.
+- **Swagger UI** auf GitHub Pages, zeigt auf Test – siehe [Anzeigen](#anzeigen).
+- **[Bruno-Collection](bruno/README.md)** – einsatzbereite Beispiel-Requests für Token, Stammdaten,
+  Finanzstammdaten, Buchhaltungen (Buchungskreise), Rechnungen und Dokumente; die Umgebung `Vorlage` zeigt
+  bereits auf Test.
 
 ## OpenAPI-Referenz
 
@@ -55,44 +64,67 @@ Die **OpenAPI-Spezifikation ist die einzige Quelle der Wahrheit** – Pfade, Met
 Feldtypen. Die handgeschriebene Doku unter [docs/](docs/) erklärt Bedeutung, Beziehungen und Lebenszyklus und
 verweist hierher, statt Feldtabellen zu duplizieren.
 
-Die Spezifikation liegt als [`openapi/dms-api.v1.yaml`](openapi/dms-api.v1.yaml) vor und wird aus dem
-laufenden Dienst generiert.
+Die Spezifikation liegt als [`openapi/dms-api.v1.yaml`](openapi/dms-api.v1.yaml) vor (daneben das
+Roh-JSON [`openapi/dms-api.v1.json`](openapi/dms-api.v1.json)). Sie wird **aus dem Build des Dienstes
+generiert** – Beschreibungen und Statuscodes stammen aus dem Code – und bei jeder Vertragsänderung von der
+Build-Pipeline als Review-PR in dieses Repository gespielt (siehe `.github/workflows/openapi-sync.yml`).
+Niemand pflegt sie von Hand.
 
 ### Anzeigen
 
-- **Online (Swagger UI):** <https://wwimmo.github.io/ww-dms-api/> – wird per GitHub Pages aus dieser
-  Spezifikation veröffentlicht (siehe `.github/workflows/pages.yml`), sobald das Repository öffentlich und
-  Pages aktiviert ist.
-- In VS Code mit einer OpenAPI-/Swagger-Vorschau-Erweiterung.
-- Lokal als HTML, z. B. `npx @redocly/cli preview-docs openapi/dms-api.v1.yaml`.
+1. **Online – Swagger UI auf GitHub Pages:** <https://wwimmo.github.io/ww-dms-api/>. Im **Servers**-Dropdown
+   oben ist die **Test-Umgebung** vorausgewählt; der zweite Eintrag «Eigener Host» hat ein Textfeld, in das
+   Sie einen anderen Host eintragen (z. B. die beim Onboarding erhaltene Produktions-URL oder einen
+   eigenen Proxy). Token über `POST /token` holen, auf **Authorize** klicken, das Token eintragen – danach
+   funktioniert **Try it out** gegen Ihren Test-Mandanten. Gegen andere Hosts geht *Try it out* nur, wenn
+   dieser Host Aufrufe aus dem Browser von `wwimmo.github.io` erlaubt (CORS); Produktion tut das bewusst
+   nicht, dort bleibt die UI eine Referenz zum Lesen.
+2. **Offline:** dieselbe Site liefert
+   [`dms-api-swagger.html`](https://wwimmo.github.io/ww-dms-api/dms-api-swagger.html) – Swagger UI und
+   Spezifikation in einer Datei, läuft per Doppelklick ohne Netzzugang. *Try it out* ist aus einer lokalen
+   Datei nicht möglich (Browser-Sicherheitsregeln); dafür die Bruno-Collection verwenden.
+3. Lokal: in VS Code mit einer OpenAPI-/Swagger-Vorschau-Erweiterung oder
+   `npx @redocly/cli preview-docs openapi/dms-api.v1.yaml`.
+4. Für Reviewer: jeder Pull Request, der die Spezifikation berührt, hängt die Offline-Datei als Artefakt
+   `dms-api-swagger` an.
+
+### Version und Herkunft
+
+Die Datei heisst `dms-api.v1.yaml`: `v1` ist die Vertragsversion und entspricht dem Pfadpräfix
+`/api/v1/dms`. Welcher Build sie erzeugt hat, steht im `info`-Block: `x-build-sha` (Commit des Dienstes)
+und `x-build-number` (Lauf der Build-Pipeline). In der Swagger UI ist beides im Kopfbereich sichtbar.
+Geben Sie diese Werte bei Rückfragen oder Abweichungsmeldungen an. Was sich zwischen zwei Ständen geändert
+hat, steht im [CHANGELOG](CHANGELOG.md).
 
 ### Was die Spezifikation abdeckt
 
-- **Dokumente:** `POST /documents`, `GET /documents`, `GET /documents/{uuid}`,
-  `PATCH /documents/{uuid}` (Teilaktualisierung), `PUT /documents/{uuid}` (Vollersatz),
-  `DELETE /documents/{uuid}`, `GET /documents/{uuid}/content`.
+- **Dokumente:** `GET /documents` (paginiert, Zeitfenster, Flag `requires_dms_archiving`),
+  `POST /documents`, `GET /documents/{uuid}` (mit `ETag`), `PATCH /documents/{uuid}` (Teilaktualisierung),
+  `PUT /documents/{uuid}` (Vollersatz), `DELETE /documents/{uuid}`, `GET /documents/{uuid}/content`.
 - **Stammdaten** (`GET`, mit `changed_since` + `changed_until`, paginiert): `/realestates`
   (+ `/{uuid}`, `/number:{number}`), `/portfolios` (+ `/{uuid}`), `/houses`, `/units`, `/appliances`,
-  `/tenants`, `/tenancies` (+ `/{uuid}`), `/persons`, `/users`, `/realestate-persons`,
-  `/realestate-users`, `/tenancy-persons`.
+  `/tenants`, `/tenancies` (+ `/{uuid}`), `/persons`, `/realestate-persons`, `/tenancy-persons`.
 - **Buchhaltung & Rechnungen (Kreditorenprozess):** `/bookkeepings` (+ `/{uuid}`), `/creditors`
   (GET/POST, + `/{uuid}`), `/accounts` (GET/POST), `/payment-accounts`, `/payoutbankaccounts`,
   `/payoutbankaccountbookkeepings`, `/cost-centers`, `/account-cost-centers`, `/vat-codes`,
   `/accountings-history`, `/orders` (+ `/{uuid}`), `/invoices` (GET/POST, + `/{uuid}` GET).
-- **Betrieb:** `GET /health`, `GET /info`, `POST /token` (Authentifizierung).
-- **Querschnitt:** Paginierung (`page`, `page_size`, `Link`-Header), Rate-Limit-Header
-  (`X-RateLimit-*`, `Retry-After`), `bearerAuth` (JWT). Siehe
+- **Betrieb:** `GET /health` (anonym), `GET /info`, `POST /token` (Authentifizierung).
+- **Querschnitt:** Paginierung (`page`, `page_size`, `Link`-Header), Rate-Limit-Signale bei `429`
+  (`Retry-After`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`), `If-Match`/`ETag`, `bearerAuth` (JWT). Siehe
   [Authentifizierung](docs/3-referenz/1-authentifizierung.md) und
   [Konventionen](docs/3-referenz/2-konventionen.md).
 
 ### Noch nicht im Vertrag modelliert
 
-- **Löschungen / Aufbewahrung.** `DELETE /documents/{uuid}` antwortet mit 204. Wie gelöschte Datensätze
-  über das Polling sichtbar werden (Markierung, Aufbewahrung), wird derzeit erarbeitet – siehe
+- **Lösch-Signal.** `DELETE /documents/{uuid}` löscht physisch (204). Gelöschte Dokumente verschwinden aus
+  dem Polling ohne Tombstone; ein explizites Signal ist ein bekannter offener Punkt – siehe
   [Konventionen](docs/3-referenz/2-konventionen.md#löschungen).
-- **Storno einer Rechnung.** Es gibt keinen Endpunkt dafür; eine übergebene Rechnung lässt sich über die
-  API nicht zurücknehmen – siehe [Konventionen](docs/3-referenz/2-konventionen.md#löschungen).
+- **Storno einer Rechnung.** Es gibt keinen Endpunkt dafür (`DELETE /invoices/{uuid}` → `405`); eine
+  übergebene Rechnung lässt sich über die API nicht zurücknehmen.
+- **Idempotenz-Schlüssel** für `POST /documents` und `POST /invoices` – siehe
+  [Konventionen](docs/3-referenz/2-konventionen.md#idempotenz).
 
 > `enum`-Werte einzelner String-Felder (z. B. Dokument-`type`, Verknüpfungs-`entity-type`,
 > `storageTargets`) sind in der Spezifikation als `string` typisiert; die gültigen Werte stehen im
 > [Domänenmodell](docs/4-konzepte/1-domaenenmodell.md) und in den [Anleitungen](docs/2-anleitungen/).
+> Die Eingabe ist Gross-/Kleinschreibungs-unabhängig.

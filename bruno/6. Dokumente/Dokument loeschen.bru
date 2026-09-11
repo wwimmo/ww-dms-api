@@ -1,0 +1,21 @@
+meta {
+  name: Dokument loeschen
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/documents/{{documentId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  Löscht das Dokument im ERP physisch (204). Es erscheint danach in keinem Abruf mehr,
+  auch nicht mit changed_since – es gibt keinen Tombstone. Optional If-Match mitsenden.
+  404 bei unbekannter ID, 412 bei veraltetem If-Match.
+}
