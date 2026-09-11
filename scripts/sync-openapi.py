@@ -22,10 +22,23 @@ import urllib.request
 
 import yaml
 
-# Fester servers-Block: nur die Test-Umgebung (Partner-Sandbox). Der Generator liefert keine servers,
-# Prod wird nicht publiziert (#21140). Muss zu den Basis-URLs in docs/3-referenz/1-authentifizierung.md passen.
+# Fester servers-Block. Der Generator liefert keine servers; Prod wird nicht publiziert (#21140), die
+# URL erhalten Partner beim Onboarding. Zwei Einträge: die Test-Sandbox und ein Template mit der
+# Variable {host} OHNE enum – Swagger UI rendert daraus ein Dropdown plus ein freies Textfeld, in das
+# ein Partner seinen Host (Prod-URL, eigener Proxy) einträgt. «Try it out» funktioniert nur gegen Hosts,
+# die den Pages-Origin per CORS erlauben (heute: Test). Muss zu docs/3-referenz/1-authentifizierung.md passen.
 SERVERS = [
-    {"url": "https://erp-test.wwimmo.net", "description": "Test"},
+    {"url": "https://erp-test.wwimmo.net", "description": "Test – Sandbox für Partner"},
+    {
+        "url": "https://{host}",
+        "description": "Eigener Host, z. B. die beim Onboarding erhaltene Produktions-URL",
+        "variables": {
+            "host": {
+                "default": "erp-test.wwimmo.net",
+                "description": "Hostname ohne Schema und Pfad; der Pfadpräfix /api/v1/dms steht in den Operationen.",
+            }
+        },
+    },
 ]
 
 

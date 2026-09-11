@@ -15,3 +15,6 @@ rules:
   # Swashbuckle vergibt keine operationIds. Follow-up im Backend (CustomOperationIds); bis dahin Warnung.
   operation-operationId: warn
   operation-4xx-response: warn
+  # Der zweite Server-Eintrag ist ein Template `https://{host}` ohne enum – absichtlich, damit
+  # Swagger UI ein freies Textfeld zeigt und Partner ihren Host selbst eintragen können.
+  no-server-variables-empty-enum: off

@@ -72,9 +72,13 @@ Niemand pflegt sie von Hand.
 
 ### Anzeigen
 
-1. **Online – Swagger UI auf GitHub Pages:** <https://wwimmo.github.io/ww-dms-api/>. Die UI zeigt auf die
-   **Test-Umgebung**: Token über `POST /token` holen, oben rechts auf **Authorize** klicken, das Token
-   eintragen – danach funktioniert **Try it out** gegen Ihren Test-Mandanten.
+1. **Online – Swagger UI auf GitHub Pages:** <https://wwimmo.github.io/ww-dms-api/>. Im **Servers**-Dropdown
+   oben ist die **Test-Umgebung** vorausgewählt; der zweite Eintrag «Eigener Host» hat ein Textfeld, in das
+   Sie einen anderen Host eintragen (z. B. die beim Onboarding erhaltene Produktions-URL oder einen
+   eigenen Proxy). Token über `POST /token` holen, auf **Authorize** klicken, das Token eintragen – danach
+   funktioniert **Try it out** gegen Ihren Test-Mandanten. Gegen andere Hosts geht *Try it out* nur, wenn
+   dieser Host Aufrufe aus dem Browser von `wwimmo.github.io` erlaubt (CORS); Produktion tut das bewusst
+   nicht, dort bleibt die UI eine Referenz zum Lesen.
 2. **Offline:** dieselbe Site liefert
    [`dms-api-swagger.html`](https://wwimmo.github.io/ww-dms-api/dms-api-swagger.html) – Swagger UI und
    Spezifikation in einer Datei, läuft per Doppelklick ohne Netzzugang. *Try it out* ist aus einer lokalen

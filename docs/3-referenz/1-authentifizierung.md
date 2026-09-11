@@ -77,8 +77,12 @@ Authorization: Bearer <token>
 | Test | `https://erp-test.wwimmo.net` | Sandbox für die Integration: eigener Test-Mandant, eigene Zugangsdaten, echte Endpunkte. |
 
 Alle Pfade beginnen mit `/api/v1/dms`, z. B. `https://erp-test.wwimmo.net/api/v1/dms/token`. Die
-**Produktions-URL** erhalten Sie beim Onboarding. Die Swagger UI auf GitHub Pages zeigt ebenfalls auf
-Test (siehe [README → Anzeigen](../../README.md#anzeigen)).
+**Produktions-URL** erhalten Sie beim Onboarding.
+
+In der Swagger UI auf GitHub Pages wählen Sie den Host im **Servers**-Dropdown: «Test» ist vorausgewählt,
+unter «Eigener Host» tragen Sie einen beliebigen Hostnamen ein (ohne Schema und Pfad). *Try it out* aus dem
+Browser funktioniert nur gegen Hosts, die den Origin `wwimmo.github.io` per CORS zulassen – das ist Test;
+Produktion lässt es bewusst nicht zu (siehe [README → Anzeigen](../../README.md#anzeigen)).
 
 ## Zugangsdaten erhalten (Kontakt aufnehmen)
 
