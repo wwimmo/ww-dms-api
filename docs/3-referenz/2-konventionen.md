@@ -73,8 +73,18 @@ Stand, den Sie nicht gesehen haben:
 3. Wurde das Dokument zwischenzeitlich geändert, antwortet die API mit `412 Precondition Failed` und
    schreibt nicht. Neu lesen, Änderung erneut anwenden, mit dem aktuellen `ETag` wiederholen.
 
-Der Header ist **optional**: ohne `If-Match` wird wie bisher geschrieben. `If-Match: *` verlangt nur, dass
-das Dokument existiert.
+Der Header ist **heute optional**: ohne `If-Match` wird wie bisher geschrieben. `If-Match: *` verlangt nur,
+dass das Dokument existiert.
+
+**Ausblick:** Der Header wird Pflicht. Schreibzugriffe ohne `If-Match` werden bereits serverseitig
+protokolliert; sobald alle angebundenen Partner ihn senden, schaltet W&W Immo die Pflicht pro Umgebung
+ein. Danach antwortet die API auf `PUT`, `PATCH` und `DELETE` ohne `If-Match` mit
+`428 Precondition Required` und schreibt nicht. Senden Sie den Header deshalb schon jetzt bei jedem
+Schreibzugriff; der Termin wird im [Changelog](../../CHANGELOG.md) angekündigt.
+
+Der `ETag` ist ein Hash über den sichtbaren Inhalt des Dokuments (Name, Verknüpfungen, Archiv-Referenz,
+…). Er ändert sich mit jeder sichtbaren Änderung, egal ob sie vom DMS oder aus dem ERP kommt, und bleibt
+gleich, solange sich nichts ändert.
 
 ## Verknüpfungen (`links`) müssen auflösbar sein
 

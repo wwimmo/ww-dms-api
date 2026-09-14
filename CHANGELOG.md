@@ -9,6 +9,19 @@ Monat.
 vorher als *deprecated* angekündigt, bevor er aus der Spezifikation verschwindet. Breaking
 Changes tragen im Sync-PR das Label `breaking`.
 
+## 2026-09 · `If-Match` im Vertrag, Pflicht angekündigt (#23151)
+
+- Neu in der Spezifikation: `If-None-Match` und der Response-Header `ETag` auf den Einzelabfragen
+  (`GET /documents/{uuid}`, `GET /realestates/{uuid}`, `GET /portfolios/{uuid}`), `If-Match` auf `PUT`,
+  `PATCH` und `DELETE /documents/{uuid}`. Verhalten unverändert – die Header waren bisher nur in der Prosa
+  beschrieben.
+- Geändert: der `ETag` eines Dokuments ist ein Hash über den sichtbaren Inhalt statt eines Zeitstempels.
+  Gespeicherte ETags aus früheren Abfragen passen einmal nicht mehr (`412`): neu lesen und wiederholen.
+- **Angekündigt:** `If-Match` wird auf den Dokument-Schreibzugriffen Pflicht. Bis dahin sind Aufrufe ohne
+  Header weiterhin erlaubt und werden protokolliert. Nach der Umstellung antwortet die API ohne Header mit
+  `428 Precondition Required`; der Termin steht hier im Changelog. Siehe
+  [Konventionen → Schreiben mit If-Match](docs/3-referenz/2-konventionen.md#schreiben-mit-if-match).
+
 ## 2026-08-26 · Breaking: Benutzer- und Visa-Endpunkte entfernt (#22159)
 
 - Entfernt: `GET /users`, `GET /realestate-users`, `GET /realestate-visas` – antworten mit `404`.
