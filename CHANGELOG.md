@@ -11,32 +11,64 @@ Changes tragen im Sync-PR das Label `breaking`.
 
 ## 2026-09-16 · Polaris-Build 20260916.3 (`04a7f940a806`)
 
-# API Changelog v1 vs. v1
+**Breaking – `POST /invoices` antwortet auf `400` in einem anderen Schema.** Bisher kamen
+Validierungsfehler als Problem Details (`type`, `title`, `status`, `detail`, `instance`), neu
+immer als `{ "isValid": false, "errors": [{ "field", "code", "message" }] }` – dieselbe Liste,
+die fachliche Fehler schon vorher benutzten. Clients, die auf `title`/`status` im Fehlerkörper
+zugreifen, müssen angepasst werden. Einzige Ausnahme: ein fehlerhafter `Idempotency-Key` wird
+vor dem Rumpf abgewiesen und bleibt Problem Details.
+
+- **Neu: `Idempotency-Key` auf `POST /invoices`** (optional, max. 255 Zeichen, eindeutig pro
+  Mandant, Aufrufer und Operation). Eine Wiederholung mit demselben Schlüssel und demselben
+  Rumpf liefert 24 h lang die gespeicherte Antwort mit `Idempotency-Replayed: true`, statt eine
+  zweite Rechnung anzulegen. Derselbe Schlüssel mit abweichendem Rumpf: `422`. Wiederholung,
+  während die erste Anfrage noch läuft: `409` mit `Retry-After`. Ohne den Header erzeugt eine
+  Wiederholung weiterhin eine zweite Rechnung.
+- **Neu: `If-Match` steht jetzt in der Spezifikation** – auf `PUT`, `PATCH` und
+  `DELETE /documents/{uuid}`, zusammen mit der neuen Antwort `428 Precondition Required`. Der
+  Header ist **heute optional**; `428` kommt erst, wenn die Pflicht pro Umgebung eingeschaltet
+  wird. Diese Umstellung wird hier vorab angekündigt.
+- **Neu: `If-None-Match` und `ETag` stehen in der Spezifikation** – auf
+  `GET /documents/{uuid}`, `GET /portfolios/{uuid}` und `GET /realestates/{uuid}`. Verhalten
+  unverändert, bisher war beides nur in der Prosa beschrieben; generierte Clients sahen es nicht.
+- **Geändert: der `ETag` eines Dokuments ist neu ein Hash über den sichtbaren Inhalt** statt über
+  den `Updated`-Stempel. Er bewegt sich damit bei jeder sichtbaren Änderung, auch wenn sie aus
+  dem ERP kommt. Einmalige Folge: **gespeicherte ETags aus der Zeit davor passen nicht mehr** und
+  führen bei `If-Match` zu einem `412`. Einmal neu lesen genügt.
+- **Geändert: Rumpffelder von `POST /invoices` sind im Schema nullable** (`amount`, `date`,
+  `bookkeepingid`, `fileId`, `creditor.legal` sowie `id`, `sort`, `amount` je Buchungszeile). Ein
+  ausdrückliches `null` wird dadurch als Validierungsfehler mit Feld und Code beantwortet statt
+  als nicht lesbarer Rumpf. Pflicht bleiben die Felder trotzdem.
+
+<details>
+<summary>Maschinell erzeugter Vertragsdiff (oasdiff)</summary>
+
+### API Changelog v1 vs. v1
 
 
-## API Changes
+#### API Changes
 
-### DELETE /api/v1/dms/documents/{uuid}
+##### DELETE /api/v1/dms/documents/{uuid}
 -  added the new optional `header` request parameter `if-match`
 -  added the non-success response with the status `428`
 
 
-### GET /api/v1/dms/documents/{uuid}
+##### GET /api/v1/dms/documents/{uuid}
 -  added the new optional `header` request parameter `if-none-match`
 -  the response header `etag` was added for the status `200`
 
 
-### PATCH /api/v1/dms/documents/{uuid}
+##### PATCH /api/v1/dms/documents/{uuid}
 -  added the new optional `header` request parameter `if-match`
 -  added the non-success response with the status `428`
 
 
-### PUT /api/v1/dms/documents/{uuid}
+##### PUT /api/v1/dms/documents/{uuid}
 -  added the new optional `header` request parameter `if-match`
 -  added the non-success response with the status `428`
 
 
-### POST /api/v1/dms/invoices
+##### POST /api/v1/dms/invoices
 -  added the new optional `header` request parameter `idempotency-key`
 -  the request property `invoices/items/invoice/accountings/items/amount` became nullable (media type: text/json)
 -  the request property `invoices/items/invoice/accountings/items/amount` became nullable (media type: application/json)
@@ -88,15 +120,16 @@ Changes tragen im Sync-PR das Label `breaking`.
 -  removed the optional property `type` from the response with the `400` status (media type: application/json)
 
 
-### GET /api/v1/dms/portfolios/{uuid}
+##### GET /api/v1/dms/portfolios/{uuid}
 -  added the new optional `header` request parameter `if-none-match`
 -  the response header `etag` was added for the status `200`
 
 
-### GET /api/v1/dms/realestates/{uuid}
+##### GET /api/v1/dms/realestates/{uuid}
 -  added the new optional `header` request parameter `if-none-match`
 -  the response header `etag` was added for the status `200`
 
+</details>
 
 ## 2026-08-26 · Breaking: Benutzer- und Visa-Endpunkte entfernt (#22159)
 
