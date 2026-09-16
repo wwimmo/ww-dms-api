@@ -72,6 +72,7 @@ Prüfen Sie den `Content-Type` der Antwort, bevor Sie parsen:
 | `409` | `POST /invoices` mit einem `Idempotency-Key`, dessen erster Aufruf noch läuft. | `Retry-After` (1 s) abwarten und denselben Aufruf unverändert wiederholen; dann kommt die gespeicherte Antwort. Siehe [Konventionen → Idempotenz](2-konventionen.md#idempotenz). |
 | `412` | Mitgesendetes `If-Match` benennt nicht den aktuellen Stand – das Dokument wurde zwischenzeitlich geändert. | Neu lesen, Änderung erneut anwenden, mit dem aktuellen `ETag` wiederholen. Siehe [Konventionen](2-konventionen.md#schreiben-mit-if-match). |
 | `422` | `POST /invoices` mit einem bereits verwendeten `Idempotency-Key`, aber anderem Body. | Für einen neuen Vorgang einen neuen Schlüssel verwenden; nicht denselben Schlüssel mit geändertem Body wiederholen. |
+| `428` | `PUT`/`PATCH`/`DELETE /documents/{uuid}` ohne `If-Match` in einer Umgebung, in der der Header Pflicht ist. | Dokument per `GET` lesen und den Aufruf mit `If-Match: "<etag>"` wiederholen. Siehe [Konventionen](2-konventionen.md#schreiben-mit-if-match). |
 | `429` | Rate-Limit. | Zurückhalten; `Retry-After` beachten. Siehe [Konventionen](2-konventionen.md#rate-limits). |
 | `502` | Vorgelagerter Dienst nicht erreichbar (z. B. beim Token-Bezug). | Mit Backoff wiederholen. |
 | `503` | `GET /health` bei ungesundem Dienst (Body mit `status` und `details`). | Wie `5xx` behandeln. |

@@ -27,7 +27,9 @@ vor dem Rumpf abgewiesen und bleibt Problem Details.
 - **Neu: `If-Match` steht jetzt in der Spezifikation** – auf `PUT`, `PATCH` und
   `DELETE /documents/{uuid}`, zusammen mit der neuen Antwort `428 Precondition Required`. Der
   Header ist **heute optional**; `428` kommt erst, wenn die Pflicht pro Umgebung eingeschaltet
-  wird. Diese Umstellung wird hier vorab angekündigt.
+  wird. Bis dahin sind Schreibzugriffe ohne Header weiterhin erlaubt und werden serverseitig
+  protokolliert. Der Termin der Umstellung wird hier im Changelog angekündigt – siehe
+  [Konventionen → Schreiben mit If-Match](docs/3-referenz/2-konventionen.md#schreiben-mit-if-match).
 - **Neu: `If-None-Match` und `ETag` stehen in der Spezifikation** – auf
   `GET /documents/{uuid}`, `GET /portfolios/{uuid}` und `GET /realestates/{uuid}`. Verhalten
   unverändert, bisher war beides nur in der Prosa beschrieben; generierte Clients sahen es nicht.
