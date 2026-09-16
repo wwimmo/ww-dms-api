@@ -2,11 +2,11 @@
   "openapi": "3.0.1",
   "info": {
     "title": "DMS API",
-    "description": "REST API for the Document Management System (DMS).\n\n## Rate Limiting\n\nAll DMS endpoints are rate-limited. Two policies apply depending on authentication:\n\n| Policy | Algorithm | Default Limit | Queue |\n|--------|-----------|---------------|-------|\n| Anonymous (e.g. /token, /health) | Fixed Window | 30 req/min per IP | 2 |\n| Authenticated (data endpoints) | Token Bucket | 100 burst, 50 req/min per client | 5 |\n\nWhen rate-limited, the API returns **HTTP 429** (\"Rate limit exceeded\") with a `Retry-After`\nheader (seconds). Limits are configurable via the `RateLimiting:Dms` configuration section.\n\n## Retry Strategy\n\nConsumers **should** implement Exponential Backoff with jitter:\n1. Wait for `Retry-After` seconds (or 1s if absent).\n2. On repeated 429s, double the delay: 1s → 2s → 4s → 8s.\n3. Add ±25% random jitter to avoid thundering-herd effects.\n4. Abort after 5 retries (~30s total).\n\n## Delta Queries\n\nList endpoints take an optional UTC window: `changed_since` (default: no lower bound → full\nload) and `changed_until` (default: no upper bound). Sending `changed_since` alone is the\nnormal polling pattern. `changed_since` after `changed_until` is rejected with **400**.\n\nThe following endpoints accept the window but **cannot apply it** — their ERP source carries no\nchange timestamps, so every call returns the full set: `/accounts`, `/account-cost-centers`,\n`/cost-centers`, `/creditors`, `/payment-accounts`, `/payoutbankaccounts`, `/vat-codes`,\n`/accountings-history`. Poll these on a slower schedule and diff locally.\n\nDeletions are not published: a removed document or master-data record simply stops appearing.\nThere are no tombstones and no webhooks — every consumer polls.\n\n## Error Format\n\nErrors use problem details (`type`, `title`, `status`, `detail`, `traceId`); field-level\nvalidation adds an `errors` map. The one exception is invoice validation\n(`POST /invoices`), which returns `{ \"isValid\": false, \"errors\": [{ field, code, message }] }`\nso callers can branch on stable codes such as `AMOUNT_MISMATCH` or `QR_IBAN_REQUIRES_REFERENCE`.",
+    "description": "REST API for the Document Management System (DMS).\n\n## Rate Limiting\n\nAll DMS endpoints are rate-limited. Two policies apply depending on authentication:\n\n| Policy | Algorithm | Default Limit | Queue |\n|--------|-----------|---------------|-------|\n| Anonymous (e.g. /token, /health) | Fixed Window | 30 req/min per IP | 2 |\n| Authenticated (data endpoints) | Token Bucket | 100 burst, 50 req/min per client | 5 |\n\nWhen rate-limited, the API returns **HTTP 429** (\"Rate limit exceeded\") with a `Retry-After`\nheader (seconds). Limits are configurable via the `RateLimiting:Dms` configuration section.\n\n## Retry Strategy\n\nConsumers **should** implement Exponential Backoff with jitter:\n1. Wait for `Retry-After` seconds (or 1s if absent).\n2. On repeated 429s, double the delay: 1s → 2s → 4s → 8s.\n3. Add ±25% random jitter to avoid thundering-herd effects.\n4. Abort after 5 retries (~30s total).\n\n## Delta Queries\n\nList endpoints take an optional UTC window: `changed_since` (default: no lower bound → full\nload) and `changed_until` (default: no upper bound). Sending `changed_since` alone is the\nnormal polling pattern. `changed_since` after `changed_until` is rejected with **400**.\n\nThe following endpoints accept the window but **cannot apply it** — their ERP source carries no\nchange timestamps, so every call returns the full set: `/accounts`, `/account-cost-centers`,\n`/cost-centers`, `/creditors`, `/payment-accounts`, `/payoutbankaccounts`, `/vat-codes`,\n`/accountings-history`. Poll these on a slower schedule and diff locally.\n\nDeletions are not published: a removed document or master-data record simply stops appearing.\nThere are no tombstones and no webhooks — every consumer polls.\n\n## Error Format\n\nErrors use problem details (`type`, `title`, `status`, `detail`, `traceId`); field-level\nvalidation adds an `errors` map. The one exception is `POST /invoices`, where **every** 400\nreturns `{ \"isValid\": false, \"errors\": [{ field, code, message }] }` so callers can branch on\nstable codes such as `REQUIRED`, `AMOUNT_MISMATCH` or `QR_IBAN_REQUIRES_REFERENCE`. A field\nyou leave out and a field you send as `null` are the same thing there and both answer\n`REQUIRED`; a value that cannot be read at all — a malformed UUID, a wrong JSON type — answers\n`INVALID_FORMAT` on that field.",
     "version": "v1",
-    "x-build-sha": "074f7bb1ce1e43655de16ad891f53bacfe02c2e1",
-    "x-build-number": "20260911.1",
-    "x-generated-at": "2026-09-11T09:25:48.3889490+00:00"
+    "x-build-sha": "04a7f940a806f29789f52f3abae07f582cb8ebac",
+    "x-build-number": "20260916.3",
+    "x-generated-at": "2026-09-16T12:23:28.9562391+00:00"
   },
   "paths": {
     "/api/v1/dms/accounts": {
@@ -963,7 +963,7 @@
           "Document"
         ],
         "summary": "Archives a document in the ERP and returns the id to store on the DMS side.",
-        "description": "Links must point at existing Stammdaten of the calling customer (`realestate`, `house`,\r\n`unit`, `appliance`, `tenant`, `tenancy`); an unknown id is rejected with 400.\r\nA retry after a timeout creates a second document — there is no idempotency key yet.",
+        "description": "Links must point at existing Stammdaten of the calling customer (`realestate`, `house`,\r\n`unit`, `appliance`, `tenant`, `tenancy`); an unknown id is rejected with 400.\r\nA retry after a timeout creates a second document — there is no idempotency key yet: documents live in\r\nthe in-memory ERP document store, and the `Idempotency-Key` that `POST /invoices` supports will\r\nbe enabled here once that store is durable.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1042,11 +1042,27 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "The `ETag` from a previous response. When the resource has not changed, the API answers 304 Not Modified without a body.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Success",
+            "headers": {
+              "ETag": {
+                "description": "Version token of this resource. Send it back as `If-None-Match` when polling and as `If-Match` when writing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "text/plain": {
                 "schema": {
@@ -1095,7 +1111,7 @@
           "Document"
         ],
         "summary": "Replaces a document completely.",
-        "description": "This is a full replacement: properties missing from the body are cleared, so `links` and\r\n`storageTargets` have to be sent along. To change single properties — the archiving hand-back\r\nin particular — use `PATCH`. Send `If-Match` with the document's ETag to be told (412)\r\ninstead of overwriting a version you have not seen.",
+        "description": "This is a full replacement: properties missing from the body are cleared, so `links` and\r\n`storageTargets` have to be sent along. To change single properties — the archiving hand-back\r\nin particular — use `PATCH`. Send `If-Match` with the document's ETag to be told (412)\r\ninstead of overwriting a version you have not seen. Where the operator has made the header\r\nmandatory, a request without it answers 428.",
         "parameters": [
           {
             "name": "uuid",
@@ -1104,6 +1120,14 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The `ETag` of the version this write is based on. When the resource has changed since, the API answers 412 Precondition Failed and writes nothing: re-read, re-apply, retry with the current `ETag`. Optional for now so existing partners keep working; unguarded writes are logged. Once the operator makes the header mandatory, a write without it answers 428 Precondition Required.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -1188,6 +1212,26 @@
             }
           },
           "412": {
+            "description": "Client Error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
             "description": "Client Error",
             "content": {
               "text/plain": {
@@ -1224,6 +1268,14 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The `ETag` of the version this write is based on. When the resource has changed since, the API answers 412 Precondition Failed and writes nothing: re-read, re-apply, retry with the current `ETag`. Optional for now so existing partners keep working; unguarded writes are logged. Once the operator makes the header mandatory, a write without it answers 428 Precondition Required.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1325,6 +1377,26 @@
                 }
               }
             }
+          },
+          "428": {
+            "description": "Client Error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       },
@@ -1341,6 +1413,14 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The `ETag` of the version this write is based on. When the resource has changed since, the API answers 412 Precondition Failed and writes nothing: re-read, re-apply, retry with the current `ETag`. Optional for now so existing partners keep working; unguarded writes are logged. Once the operator makes the header mandatory, a write without it answers 428 Precondition Required.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -1369,6 +1449,26 @@
             }
           },
           "412": {
+            "description": "Client Error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
             "description": "Client Error",
             "content": {
               "text/plain": {
@@ -1751,7 +1851,18 @@
           "Invoice"
         ],
         "summary": "Hands an invoice to the KrediFlow visa workflow. The file content stays in the DMS.",
-        "description": "`fileId` names a previously archived document (`POST /documents`); only the id travels, never\r\n            the file. Validation errors come back as <c>{ \"isValid\": false, \"errors\": [{ \"field\", \"code\",\r\n            \"message\" }] }</c> — a different shape from the problem-details used elsewhere, because the codes are\r\n            the ERP's contract. A retry after a timeout creates a second invoice; there is no idempotency key yet.",
+        "description": "`fileId` names a previously archived document (`POST /documents`); only the id travels, never\r\n            the file. <b>Every</b> 400 about the invoice itself comes back as <c>{ \"isValid\": false, \"errors\": [{\r\n            \"field\", \"code\", \"message\" }] }</c> — a different shape from the problem-details used elsewhere, because\r\n            the codes are the ERP's contract. That covers business rules (`REQUIRED`, `AMOUNT_MISMATCH`, …), a\r\n            missing invoice envelope (`Invoices / REQUIRED`) and a value that cannot be read at all\r\n            (`INVALID_FORMAT`). Only a malformed `Idempotency-Key` header is answered with problem details,\r\n            because it is rejected before the body is read.\r\n            Send an optional `Idempotency-Key` header (at most 255 characters, unique per caller and operation)\r\n            to make the call safe to retry after a timeout: for 24 hours a repeat with the same key and the same\r\n            body returns the stored answer with `Idempotency-Replayed: true` instead of creating a second\r\n            invoice; the same key with a different body is rejected with 422, and a repeat while the first request\r\n            is still running answers 409 with `Retry-After`. Without the header a retry creates a second invoice.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Optional client-generated key (for example a UUID) that makes this request safe to retry. Within 24 hours a repeat with the same key and the same body returns the stored answer (marked `Idempotency-Replayed: true`) instead of creating a second resource; the same key with a different body is rejected with 422, and a repeat while the first request is still running with 409. Unique per caller and operation.",
+            "schema": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1774,6 +1885,14 @@
         "responses": {
           "201": {
             "description": "Created",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "`true` when this answer was replayed from a previous request with the same Idempotency-Key.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "text/plain": {
                 "schema": {
@@ -1794,6 +1913,46 @@
           },
           "400": {
             "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceValidationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceValidationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceValidationResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Client Error",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2486,11 +2645,27 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "The `ETag` from a previous response. When the resource has not changed, the API answers 304 Not Modified without a body.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Success",
+            "headers": {
+              "ETag": {
+                "description": "Version token of this resource. Send it back as `If-None-Match` when polling and as `If-Match` when writing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "text/plain": {
                 "schema": {
@@ -2636,11 +2811,27 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "The `ETag` from a previous response. When the resource has not changed, the API answers 304 Not Modified without a body.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Success",
+            "headers": {
+              "ETag": {
+                "description": "Version token of this resource. Send it back as `If-None-Match` when polling and as `If-Match` when writing.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "text/plain": {
                 "schema": {
@@ -4412,11 +4603,13 @@
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "nullable": true
           },
           "sort": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "accountid": {
             "type": "string",
@@ -4449,7 +4642,8 @@
           },
           "amount": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "nullable": true
           },
           "netamount": {
             "type": "number",
@@ -4649,7 +4843,8 @@
             "nullable": true
           },
           "legal": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "phonebusiness": {
             "type": "string",
@@ -4733,7 +4928,8 @@
           },
           "date": {
             "type": "string",
-            "format": "date"
+            "format": "date",
+            "nullable": true
           },
           "duedate": {
             "type": "string",
@@ -4742,7 +4938,8 @@
           },
           "amount": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "nullable": true
           },
           "creditor": {
             "$ref": "#/components/schemas/InvoiceCreditorData"
@@ -4760,7 +4957,8 @@
           },
           "bookkeepingid": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "nullable": true
           },
           "unitid": {
             "type": "string",
@@ -4773,7 +4971,8 @@
           "fileId": {
             "type": "string",
             "description": "UUID of the already-archived document (DMS file id). Only the id is passed\r\nthrough to the ERP — the file content itself is never transferred (#21919).",
-            "format": "uuid"
+            "format": "uuid",
+            "nullable": true
           },
           "dmsReference": {
             "$ref": "#/components/schemas/DmsReferenceRequest"
@@ -5053,6 +5252,41 @@
         ],
         "type": "string",
         "description": "Invoice type (Typ der Rechnung) exposed on the DMS wire as a speaking enum instead of the raw ERP code.\r\nBacked by cred enumeration key 885 (`cred.invoicetype`). The numeric code stays in the DB/ERP and\r\nis mapped to/from this enum in the DMS UseCases layer only (#22269).\r\nMembers and codes mirror the mobile.wiki page \"cred enumerations\" (page 394), the source of truth."
+      },
+      "InvoiceValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "InvoiceValidationResponse": {
+        "type": "object",
+        "properties": {
+          "isValid": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceValidationErrorResponse"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "400 validation body returned when an invoice fails KrediFlow validation.\r\nFrozen wire contract for the external DMS consumer."
       },
       "InvoiceWrapper": {
         "type": "object",
