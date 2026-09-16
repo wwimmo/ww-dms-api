@@ -92,8 +92,9 @@ sequenceDiagram
 - `dmsReference` ist beim Import optional; wenn gesetzt, ist `documentId` Pflicht und `archive` muss die
   Archiv-UUID Ihrer Anbindung sein (siehe
   [Konventionen](../3-referenz/2-konventionen.md#teilaktualisierung-patch-statt-put)).
-- Ein Retry nach einem Timeout legt ein **zweites** Dokument an (kein Idempotenz-Schlüssel) – vorher per
-  `GET /documents?changed_since=…` prüfen.
+- Ein Retry nach einem Timeout legt ein **zweites** Dokument an – `POST /documents` kennt den
+  `Idempotency-Key` von `POST /invoices` noch nicht. Vorher per `GET /documents?changed_since=…` prüfen
+  (siehe [Konventionen](../3-referenz/2-konventionen.md#idempotenz)).
 - Für Kreditorenrechnungen verwenden Sie stattdessen
   [Rechnung importieren](2-rechnung-importieren.md).
 - Ausführbares Beispiel: Bruno-Collection, Ordner *6. Dokumente* (`Dokument erstellen`).

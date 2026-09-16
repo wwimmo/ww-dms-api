@@ -38,8 +38,9 @@ Sie konsumieren die API ausschliesslich durch **Abrufen** – typischerweise
 - Jede Änderung trägt einen Zeitstempel, damit `changed_since` sie findet.
 - Löschungen werden **nicht** signalisiert: ein gelöschtes Dokument fehlt einfach in späteren Abrufen
   (kein Tombstone) – siehe [Konventionen](../3-referenz/2-konventionen.md#löschungen).
-- **Lesende** Abrufe sind beliebig wiederholbar. **Schreibende** Aufrufe sind es nicht: es gibt noch keinen
-  Idempotenz-Schlüssel, eine Wiederholung nach einem Timeout legt einen zweiten Datensatz an – siehe
+- **Lesende** Abrufe sind beliebig wiederholbar. `POST /invoices` ist es mit dem Header `Idempotency-Key`
+  ebenfalls: eine Wiederholung liefert die gespeicherte Antwort statt einer zweiten Rechnung.
+  `POST /documents` kennt den Schlüssel noch nicht – siehe
   [Konventionen](../3-referenz/2-konventionen.md#idempotenz).
 
 ## Das Domänenmodell

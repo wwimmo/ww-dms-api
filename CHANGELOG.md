@@ -35,6 +35,8 @@ vor dem Rumpf abgewiesen und bleibt Problem Details.
   den `Updated`-Stempel. Er bewegt sich damit bei jeder sichtbaren Änderung, auch wenn sie aus
   dem ERP kommt. Einmalige Folge: **gespeicherte ETags aus der Zeit davor passen nicht mehr** und
   führen bei `If-Match` zu einem `412`. Einmal neu lesen genügt.
+- **Unverändert: `POST /documents` nimmt noch keinen `Idempotency-Key`.** Die Ablage ist dort
+  heute flüchtig; der Schlüssel folgt zusammen mit der dauerhaften Dokumentablage.
 - **Geändert: Rumpffelder von `POST /invoices` sind im Schema nullable** (`amount`, `date`,
   `bookkeepingid`, `fileId`, `creditor.legal` sowie `id`, `sort`, `amount` je Buchungszeile). Ein
   ausdrückliches `null` wird dadurch als Validierungsfehler mit Feld und Code beantwortet statt

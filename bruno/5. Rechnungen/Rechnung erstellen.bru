@@ -14,6 +14,10 @@ auth:bearer {
   token: {{token}}
 }
 
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
 body:json {
   {
     "invoices": [
@@ -59,6 +63,9 @@ docs {
   erstellen'); es wird nur die ID übergeben, nie der Dateiinhalt. creditor mit id aus
   'Kreditoren synchronisieren', accountid aus 'Konten synchronisieren'.
   Antwort 201 { id, number } + Location; die ID wird als {{invoiceId}} gespeichert.
+  Idempotency-Key: pro Senden eine neue GUID. Zum Ausprobieren der Wiederholung den Wert
+  fest eintragen und den Request zweimal senden – die zweite Antwort trägt
+  Idempotency-Replayed: true und dieselbe id; ein geänderter Body liefert dann 422.
   400 kommt in zwei Formen: Validierungsliste { isValid, errors[{field, code, message}] }
   oder Problem-Format bei strukturellen Fehlern (siehe docs/3-referenz/3-fehler.md).
 }

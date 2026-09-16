@@ -110,7 +110,7 @@ hat, steht im [CHANGELOG](CHANGELOG.md).
   `/accountings-history`, `/orders` (+ `/{uuid}`), `/invoices` (GET/POST, + `/{uuid}` GET).
 - **Betrieb:** `GET /health` (anonym), `GET /info`, `POST /token` (Authentifizierung).
 - **Querschnitt:** Paginierung (`page`, `page_size`, `Link`-Header), Rate-Limit-Signale bei `429`
-  (`Retry-After`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`), `If-Match`/`ETag`, `bearerAuth` (JWT). Siehe
+  (`Retry-After`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`), `If-Match`/`ETag`, `Idempotency-Key`/`Idempotency-Replayed` (nur `POST /invoices`), `bearerAuth` (JWT). Siehe
   [Authentifizierung](docs/3-referenz/1-authentifizierung.md) und
   [Konventionen](docs/3-referenz/2-konventionen.md).
 
@@ -121,8 +121,9 @@ hat, steht im [CHANGELOG](CHANGELOG.md).
   [Konventionen](docs/3-referenz/2-konventionen.md#löschungen).
 - **Storno einer Rechnung.** Es gibt keinen Endpunkt dafür (`DELETE /invoices/{uuid}` → `405`); eine
   übergebene Rechnung lässt sich über die API nicht zurücknehmen.
-- **Idempotenz-Schlüssel** für `POST /documents` und `POST /invoices` – siehe
-  [Konventionen](docs/3-referenz/2-konventionen.md#idempotenz).
+- **Idempotenz-Schlüssel für `POST /documents`.** `POST /invoices` hat ihn (`Idempotency-Key`, siehe
+  [Konventionen](docs/3-referenz/2-konventionen.md#idempotenz)); für Dokumente folgt er, sobald deren
+  Ablage dauerhaft ist.
 
 > `enum`-Werte einzelner String-Felder (z. B. Dokument-`type`, Verknüpfungs-`entity-type`,
 > `storageTargets`) sind in der Spezifikation als `string` typisiert; die gültigen Werte stehen im
