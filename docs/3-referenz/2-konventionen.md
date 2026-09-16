@@ -97,11 +97,36 @@ unbekannte ID wird mit `400` abgewiesen (`title: "Invalid request"`,
 
 Lesende Abrufe können beliebig wiederholt werden.
 
-> **Schreibende Operationen sind derzeit nicht wiederholungssicher.** Es gibt noch keinen
-> Idempotenz-Schlüssel: eine Wiederholung von `POST /documents` oder `POST /invoices` nach einem Timeout
-> erzeugt einen **zweiten** Datensatz. Führen Sie auf Ihrer Seite einen eigenen Dedup-Schlüssel und prüfen
-> Sie nach einem Timeout per `GET` mit `changed_since`, ob der erste Versuch angekommen ist, bevor Sie
-> erneut senden.
+### `Idempotency-Key` auf `POST /invoices`
+
+Bricht die Verbindung nach dem Senden einer Rechnung ab, wissen Sie nicht, ob sie angelegt wurde. Damit
+Sie gefahrlos wiederholen können, akzeptiert `POST /invoices` den optionalen Header `Idempotency-Key`:
+
+- **Schlüssel:** ein von Ihnen erzeugter, pro Vorgang eindeutiger Wert (z. B. eine UUID), höchstens
+  255 Zeichen. Leer oder länger → `400`.
+- **Geltungsbereich:** pro Mandant, pro Client (`client_id` des Tokens) und pro Operation. Ein Schlüssel,
+  den ein anderer Mandant verwendet, kollidiert nicht mit Ihrem.
+- **Fenster:** 24 Stunden ab dem ersten Aufruf.
+- **Wiederholung mit gleichem Schlüssel und byteidentischem Body:** Sie erhalten die Antwort des ersten
+  Aufrufs zurück (gleicher Status, gleicher Body, gleiche `Location`), gekennzeichnet mit dem Header
+  `Idempotency-Replayed: true`. Es entsteht keine zweite Rechnung. Senden Sie den Body unverändert –
+  auch Leerzeichen und Feldreihenfolge zählen.
+- **Gleicher Schlüssel, anderer Body:** `422 Unprocessable Content` (Problem-Format). Ein neuer Vorgang
+  braucht einen neuen Schlüssel.
+- **Wiederholung, während der erste Aufruf noch läuft:** `409 Conflict` mit `Retry-After: 1`. Kurz warten
+  und denselben Aufruf wiederholen; dann kommt die gespeicherte Antwort.
+- **Gespeichert werden auch Ablehnungen (`400`)**: Wer eine Validierungsmeldung erhält, den Fehler
+  korrigiert und erneut sendet, verwendet dafür einen **neuen** Schlüssel – der alte antwortet mit `422`,
+  weil sich der Body geändert hat.
+- **Nicht gespeichert werden `5xx`-Antworten**: nach einem Serverfehler oder Timeout ist der Schlüssel
+  frei, die Wiederholung mit demselben Schlüssel legt die Rechnung genau einmal an.
+
+Ohne Header verhält sich `POST /invoices` wie bisher: jede Wiederholung erzeugt eine weitere Rechnung.
+
+> **`POST /documents` kennt den Schlüssel noch nicht.** Eine Wiederholung nach einem Timeout erzeugt dort
+> ein **zweites** Dokument. Prüfen Sie vor dem erneuten Senden per `GET /documents?changed_since=…`, ob
+> der erste Versuch angekommen ist. Der Header wird für Dokumente nachgezogen, sobald deren Ablage
+> dauerhaft ist.
 
 ## Löschungen
 

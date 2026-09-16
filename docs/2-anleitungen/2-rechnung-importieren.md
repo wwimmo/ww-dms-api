@@ -54,6 +54,19 @@ läuft im DMS und ist **nicht Teil dieser API**.
    Antwort `201 Created` mit `{ "id": "<uuid>", "number": <laufnummer|null> }` und
    `Location: /api/v1/dms/invoices/{id}`. Die vollständige Rechnung lesen Sie mit `GET /invoices/{id}`.
 
+   **Wiederholung nach Timeout.** Senden Sie den Header `Idempotency-Key` mit einem pro Rechnung
+   eindeutigen Wert (z. B. einer UUID) mit. Bleibt die Antwort aus, wiederholen Sie denselben Aufruf mit
+   demselben Schlüssel und unverändertem Body: Sie erhalten die Antwort des ersten Versuchs zurück
+   (`Idempotency-Replayed: true`) oder, falls er nie ankam, die Rechnung wird jetzt genau einmal
+   angelegt. Details und Grenzfälle (`409`, `422`) in den
+   [Konventionen](../3-referenz/2-konventionen.md#idempotenz).
+
+   ```
+   POST /invoices
+   Content-Type: application/json
+   Idempotency-Key: 3f9c2a7e-4b1d-4e0a-9c2b-7d6e5f4a3b21
+   ```
+
    Bei Fehlern antwortet die API mit `400` in **zwei Formen**: der fachlichen Validierungsliste
    `{ "isValid": false, "errors": [ { field, code, message } ] }` oder – bei strukturellen Fehlern wie einem
    leeren `invoices`-Array – im Problem-Format. Siehe [Fehlerbehandlung](../3-referenz/3-fehler.md).
