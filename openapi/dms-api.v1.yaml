@@ -41,12 +41,15 @@ info:
     ## Error Format
 
     Errors use problem details (`type`, `title`, `status`, `detail`, `traceId`); field-level
-    validation adds an `errors` map. The one exception is invoice validation
-    (`POST /invoices`), which returns `{ "isValid": false, "errors": [{ field, code, message }] }`
-    so callers can branch on stable codes such as `AMOUNT_MISMATCH` or `QR_IBAN_REQUIRES_REFERENCE`.
+    validation adds an `errors` map. The one exception is `POST /invoices`, where **every** 400
+    returns `{ "isValid": false, "errors": [{ field, code, message }] }` so callers can branch on
+    stable codes such as `REQUIRED`, `AMOUNT_MISMATCH` or `QR_IBAN_REQUIRES_REFERENCE`. A field
+    you leave out and a field you send as `null` are the same thing there and both answer
+    `REQUIRED`; a value that cannot be read at all — a malformed UUID, a wrong JSON type — answers
+    `INVALID_FORMAT` on that field.
   version: v1
-  x-build-sha: 074f7bb1ce1e43655de16ad891f53bacfe02c2e1
-  x-build-number: '20260911.1'
+  x-build-sha: 04a7f940a806f29789f52f3abae07f582cb8ebac
+  x-build-number: '20260916.3'
 servers:
 - url: https://erp-test.wwimmo.net
   description: Test – Sandbox für Partner
@@ -667,7 +670,9 @@ paths:
       description: |-
         Links must point at existing Stammdaten of the calling customer (`realestate`, `house`,
         `unit`, `appliance`, `tenant`, `tenancy`); an unknown id is rejected with 400.
-        A retry after a timeout creates a second document — there is no idempotency key yet.
+        A retry after a timeout creates a second document — there is no idempotency key yet: documents live in
+        the in-memory ERP document store, and the `Idempotency-Key` that `POST /invoices` supports will
+        be enabled here once that store is durable.
       requestBody:
         content:
           application/json:
@@ -716,9 +721,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
       responses:
         '200':
           description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -751,7 +768,8 @@ paths:
         This is a full replacement: properties missing from the body are cleared, so `links` and
         `storageTargets` have to be sent along. To change single properties — the archiving hand-back
         in particular — use `PATCH`. Send `If-Match` with the document's ETag to be told (412)
-        instead of overwriting a version you have not seen.
+        instead of overwriting a version you have not seen. Where the operator has made the header
+        mandatory, a request without it answers 428.
       parameters:
       - name: uuid
         in: path
@@ -759,6 +777,15 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: 'The `ETag` of the version this write is based on. When the resource has changed
+          since, the API answers 412 Precondition Failed and writes nothing: re-read, re-apply, retry
+          with the current `ETag`. Optional for now so existing partners keep working; unguarded writes
+          are logged. Once the operator makes the header mandatory, a write without it answers 428 Precondition
+          Required.'
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
@@ -808,6 +835,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '412':
+          description: Client Error
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
           description: Client Error
           content:
             text/plain:
@@ -835,6 +874,15 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: 'The `ETag` of the version this write is based on. When the resource has changed
+          since, the API answers 412 Precondition Failed and writes nothing: re-read, re-apply, retry
+          with the current `ETag`. Optional for now so existing partners keep working; unguarded writes
+          are logged. Once the operator makes the header mandatory, a write without it answers 428 Precondition
+          Required.'
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
@@ -895,6 +943,18 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Client Error
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
     delete:
       tags:
       - Document
@@ -906,6 +966,15 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-Match
+        in: header
+        description: 'The `ETag` of the version this write is based on. When the resource has changed
+          since, the API answers 412 Precondition Failed and writes nothing: re-read, re-apply, retry
+          with the current `ETag`. Optional for now so existing partners keep working; unguarded writes
+          are logged. Once the operator makes the header mandatory, a write without it answers 428 Precondition
+          Required.'
+        schema:
+          type: string
       responses:
         '204':
           description: No Content
@@ -922,6 +991,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '412':
+          description: Client Error
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
           description: Client Error
           content:
             text/plain:
@@ -1156,9 +1237,28 @@ paths:
       summary: Hands an invoice to the KrediFlow visa workflow. The file content stays in the DMS.
       description: |-
         `fileId` names a previously archived document (`POST /documents`); only the id travels, never
-                    the file. Validation errors come back as <c>{ "isValid": false, "errors": [{ "field", "code",
-                    "message" }] }</c> — a different shape from the problem-details used elsewhere, because the codes are
-                    the ERP's contract. A retry after a timeout creates a second invoice; there is no idempotency key yet.
+                    the file. <b>Every</b> 400 about the invoice itself comes back as <c>{ "isValid": false, "errors": [{
+                    "field", "code", "message" }] }</c> — a different shape from the problem-details used elsewhere, because
+                    the codes are the ERP's contract. That covers business rules (`REQUIRED`, `AMOUNT_MISMATCH`, …), a
+                    missing invoice envelope (`Invoices / REQUIRED`) and a value that cannot be read at all
+                    (`INVALID_FORMAT`). Only a malformed `Idempotency-Key` header is answered with problem details,
+                    because it is rejected before the body is read.
+                    Send an optional `Idempotency-Key` header (at most 255 characters, unique per caller and operation)
+                    to make the call safe to retry after a timeout: for 24 hours a repeat with the same key and the same
+                    body returns the stored answer with `Idempotency-Replayed: true` instead of creating a second
+                    invoice; the same key with a different body is rejected with 422, and a repeat while the first request
+                    is still running answers 409 with `Retry-After`. Without the header a retry creates a second invoice.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: 'Optional client-generated key (for example a UUID) that makes this request safe
+          to retry. Within 24 hours a repeat with the same key and the same body returns the stored answer
+          (marked `Idempotency-Replayed: true`) instead of creating a second resource; the same key with
+          a different body is rejected with 422, and a repeat while the first request is still running
+          with 409. Unique per caller and operation.'
+        schema:
+          maxLength: 255
+          type: string
       requestBody:
         content:
           application/json:
@@ -1173,6 +1273,12 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            Idempotency-Replayed:
+              description: '`true` when this answer was replayed from a previous request with the same
+                Idempotency-Key.'
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -1185,6 +1291,30 @@ paths:
                 $ref: '#/components/schemas/InvoiceCreateResponse'
         '400':
           description: Bad Request
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/InvoiceValidationResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceValidationResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceValidationResponse'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Client Error
           content:
             text/plain:
               schema:
@@ -1618,9 +1748,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
       responses:
         '200':
           description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -1710,9 +1852,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
       responses:
         '200':
           description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -2961,9 +3115,11 @@ components:
         id:
           type: string
           format: uuid
+          nullable: true
         sort:
           type: integer
           format: int32
+          nullable: true
         accountid:
           type: string
           format: uuid
@@ -2990,6 +3146,7 @@ components:
         amount:
           type: number
           format: double
+          nullable: true
         netamount:
           type: number
           format: double
@@ -3152,6 +3309,7 @@ components:
           nullable: true
         legal:
           type: boolean
+          nullable: true
         phonebusiness:
           type: string
           nullable: true
@@ -3214,6 +3372,7 @@ components:
         date:
           type: string
           format: date
+          nullable: true
         duedate:
           type: string
           format: date
@@ -3221,6 +3380,7 @@ components:
         amount:
           type: number
           format: double
+          nullable: true
         creditor:
           $ref: '#/components/schemas/InvoiceCreditorData'
         orderid:
@@ -3234,6 +3394,7 @@ components:
         bookkeepingid:
           type: string
           format: uuid
+          nullable: true
         unitid:
           type: string
           nullable: true
@@ -3246,6 +3407,7 @@ components:
             UUID of the already-archived document (DMS file id). Only the id is passed
             through to the ERP — the file content itself is never transferred (#21919).
           format: uuid
+          nullable: true
         dmsReference:
           $ref: '#/components/schemas/DmsReferenceRequest'
         accountings:
@@ -3476,6 +3638,33 @@ components:
         Backed by cred enumeration key 885 (`cred.invoicetype`). The numeric code stays in the DB/ERP and
         is mapped to/from this enum in the DMS UseCases layer only (#22269).
         Members and codes mirror the mobile.wiki page "cred enumerations" (page 394), the source of truth.
+    InvoiceValidationErrorResponse:
+      type: object
+      properties:
+        field:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+      additionalProperties: false
+    InvoiceValidationResponse:
+      type: object
+      properties:
+        isValid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceValidationErrorResponse'
+          nullable: true
+      additionalProperties: false
+      description: |-
+        400 validation body returned when an invoice fails KrediFlow validation.
+        Frozen wire contract for the external DMS consumer.
     InvoiceWrapper:
       type: object
       properties:

@@ -9,6 +9,95 @@ Monat.
 vorher als *deprecated* angekündigt, bevor er aus der Spezifikation verschwindet. Breaking
 Changes tragen im Sync-PR das Label `breaking`.
 
+## 2026-09-16 · Polaris-Build 20260916.3 (`04a7f940a806`)
+
+# API Changelog v1 vs. v1
+
+
+## API Changes
+
+### DELETE /api/v1/dms/documents/{uuid}
+-  added the new optional `header` request parameter `if-match`
+-  added the non-success response with the status `428`
+
+
+### GET /api/v1/dms/documents/{uuid}
+-  added the new optional `header` request parameter `if-none-match`
+-  the response header `etag` was added for the status `200`
+
+
+### PATCH /api/v1/dms/documents/{uuid}
+-  added the new optional `header` request parameter `if-match`
+-  added the non-success response with the status `428`
+
+
+### PUT /api/v1/dms/documents/{uuid}
+-  added the new optional `header` request parameter `if-match`
+-  added the non-success response with the status `428`
+
+
+### POST /api/v1/dms/invoices
+-  added the new optional `header` request parameter `idempotency-key`
+-  the request property `invoices/items/invoice/accountings/items/amount` became nullable (media type: text/json)
+-  the request property `invoices/items/invoice/accountings/items/amount` became nullable (media type: application/json)
+-  the request property `invoices/items/invoice/accountings/items/amount` became nullable (media type: application/*+json)
+-  the request property `invoices/items/invoice/accountings/items/id` became nullable (media type: application/*+json)
+-  the request property `invoices/items/invoice/accountings/items/id` became nullable (media type: application/json)
+-  the request property `invoices/items/invoice/accountings/items/id` became nullable (media type: text/json)
+-  the request property `invoices/items/invoice/accountings/items/sort` became nullable (media type: application/json)
+-  the request property `invoices/items/invoice/accountings/items/sort` became nullable (media type: text/json)
+-  the request property `invoices/items/invoice/accountings/items/sort` became nullable (media type: application/*+json)
+-  the request property `invoices/items/invoice/amount` became nullable (media type: text/json)
+-  the request property `invoices/items/invoice/amount` became nullable (media type: application/json)
+-  the request property `invoices/items/invoice/amount` became nullable (media type: application/*+json)
+-  the request property `invoices/items/invoice/bookkeepingid` became nullable (media type: text/json)
+-  the request property `invoices/items/invoice/bookkeepingid` became nullable (media type: application/*+json)
+-  the request property `invoices/items/invoice/bookkeepingid` became nullable (media type: application/json)
+-  the request property `invoices/items/invoice/creditor/legal` became nullable (media type: application/*+json)
+-  the request property `invoices/items/invoice/creditor/legal` became nullable (media type: application/json)
+-  the request property `invoices/items/invoice/creditor/legal` became nullable (media type: text/json)
+-  the request property `invoices/items/invoice/date` became nullable (media type: text/json)
+-  the request property `invoices/items/invoice/date` became nullable (media type: application/*+json)
+-  the request property `invoices/items/invoice/date` became nullable (media type: application/json)
+-  the request property `invoices/items/invoice/fileId` became nullable (media type: application/json)
+-  the request property `invoices/items/invoice/fileId` became nullable (media type: application/*+json)
+-  the request property `invoices/items/invoice/fileId` became nullable (media type: text/json)
+-  the response header `idempotency-replayed` was added for the status `201`
+-  added the non-success response with the status `409`
+-  added the non-success response with the status `422`
+-  added the optional property `errors` to the response with the `400` status (media type: text/plain)
+-  added the optional property `errors` to the response with the `400` status (media type: text/json)
+-  added the optional property `errors` to the response with the `400` status (media type: application/json)
+-  added the optional property `isValid` to the response with the `400` status (media type: application/json)
+-  added the optional property `isValid` to the response with the `400` status (media type: text/plain)
+-  added the optional property `isValid` to the response with the `400` status (media type: text/json)
+-  removed the optional property `detail` from the response with the `400` status (media type: text/json)
+-  removed the optional property `detail` from the response with the `400` status (media type: text/plain)
+-  removed the optional property `detail` from the response with the `400` status (media type: application/json)
+-  removed the optional property `instance` from the response with the `400` status (media type: text/json)
+-  removed the optional property `instance` from the response with the `400` status (media type: application/json)
+-  removed the optional property `instance` from the response with the `400` status (media type: text/plain)
+-  removed the optional property `status` from the response with the `400` status (media type: text/json)
+-  removed the optional property `status` from the response with the `400` status (media type: text/plain)
+-  removed the optional property `status` from the response with the `400` status (media type: application/json)
+-  removed the optional property `title` from the response with the `400` status (media type: text/plain)
+-  removed the optional property `title` from the response with the `400` status (media type: text/json)
+-  removed the optional property `title` from the response with the `400` status (media type: application/json)
+-  removed the optional property `type` from the response with the `400` status (media type: text/json)
+-  removed the optional property `type` from the response with the `400` status (media type: text/plain)
+-  removed the optional property `type` from the response with the `400` status (media type: application/json)
+
+
+### GET /api/v1/dms/portfolios/{uuid}
+-  added the new optional `header` request parameter `if-none-match`
+-  the response header `etag` was added for the status `200`
+
+
+### GET /api/v1/dms/realestates/{uuid}
+-  added the new optional `header` request parameter `if-none-match`
+-  the response header `etag` was added for the status `200`
+
+
 ## 2026-08-26 · Breaking: Benutzer- und Visa-Endpunkte entfernt (#22159)
 
 - Entfernt: `GET /users`, `GET /realestate-users`, `GET /realestate-visas` – antworten mit `404`.
