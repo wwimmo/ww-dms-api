@@ -9,6 +9,17 @@ Monat.
 vorher als *deprecated* angekündigt, bevor er aus der Spezifikation verschwindet. Breaking
 Changes tragen im Sync-PR das Label `breaking`.
 
+## 2026-09-17 · angekündigt mit Polaris-PR 9324 (Bug #23979)
+
+- **Neu: Rate-Limit-Budget auf jeder Antwort.** `X-RateLimit-Limit`, `X-RateLimit-Remaining` und
+  `X-RateLimit-Reset` kommen auf jeder rate-limitierten Antwort, nicht mehr nur beim `429`; der `429`
+  trägt zusätzlich neu `X-RateLimit-Limit`. `Limit` ist die Zahl der Anfragen pro Fenster (anonym) bzw.
+  die Kapazität des Token-Buckets (authentifiziert), `Remaining` der Rest nach dieser Anfrage, `Reset`
+  die Unix-Sekunde des Fensterendes bzw. der nächsten Auffüllung. Bisher stand hier, erfolgreiche
+  Antworten trügen keine Rate-Limit-Header; das beschrieb den damaligen Stand der API, nicht die Zusage.
+  Wirksam auf Test und Prod mit dem nächsten Polaris-Release nach dem Merge. Siehe
+  [Konventionen → Rate-Limits](docs/3-referenz/2-konventionen.md#rate-limits).
+
 ## 2026-09-16 · Polaris-Build 20260916.3 (`04a7f940a806`)
 
 **Breaking – `POST /invoices` antwortet auf `400` in einem anderen Schema.** Bisher kamen

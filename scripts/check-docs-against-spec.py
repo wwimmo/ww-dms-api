@@ -40,7 +40,7 @@ FORBIDDEN = [
     (r"\berp\.wwimmo\.net", "die Prod-URL wird beim Onboarding mitgeteilt, nicht publiziert"),
     (r"octet-stream", "der Content-Download liefert den gespeicherten MIME-Typ, kein octet-stream"),
     (r"Soft-Delete", "DELETE löscht physisch, kein Soft-Delete"),
-    (r"X-RateLimit-Limit", "diesen Header sendet die API nicht"),
+    (r"tragen \*\*keine\*\* Rate-Limit-Header", "seit #23979 meldet jede Antwort X-RateLimit-Limit/-Remaining/-Reset"),
     (r"\(in Arbeit\)", "Platzhalter-Markierung – fertigstellen oder als Follow-up benennen"),
     (r"InvoiceUploadRequest", "so heisst das Schema nicht mehr; über den Endpunkt referenzieren"),
     (r"beide erforderlich", "changed_since und changed_until sind optional"),

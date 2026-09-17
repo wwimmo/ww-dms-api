@@ -109,8 +109,8 @@ hat, steht im [CHANGELOG](CHANGELOG.md).
   `/payoutbankaccountbookkeepings`, `/cost-centers`, `/account-cost-centers`, `/vat-codes`,
   `/accountings-history`, `/orders` (+ `/{uuid}`), `/invoices` (GET/POST, + `/{uuid}` GET).
 - **Betrieb:** `GET /health` (anonym), `GET /info`, `POST /token` (Authentifizierung).
-- **Querschnitt:** Paginierung (`page`, `page_size`, `Link`-Header), Rate-Limit-Signale bei `429`
-  (`Retry-After`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`), `If-Match`/`ETag`, `Idempotency-Key`/`Idempotency-Replayed` (nur `POST /invoices`), `bearerAuth` (JWT). Siehe
+- **Querschnitt:** Paginierung (`page`, `page_size`, `Link`-Header), Rate-Limit-Budget auf jeder Antwort
+  (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`) und `Retry-After` bei `429`, `If-Match`/`ETag`, `Idempotency-Key`/`Idempotency-Replayed` (nur `POST /invoices`), `bearerAuth` (JWT). Siehe
   [Authentifizierung](docs/3-referenz/1-authentifizierung.md) und
   [Konventionen](docs/3-referenz/2-konventionen.md).
 
