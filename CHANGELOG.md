@@ -9,6 +9,220 @@ Monat.
 vorher als *deprecated* angekündigt, bevor er aus der Spezifikation verschwindet. Breaking
 Changes tragen im Sync-PR das Label `breaking`.
 
+## 2026-09-17 · Polaris-Build 20260917.1 (`e00ad7968b6d`)
+
+# API Changelog v1 vs. v1
+
+
+## API Changes
+
+### GET /api/v1/dms/account-cost-centers
+-  added the new optional `query` request parameter `account_id`
+-  added the new optional `query` request parameter `costcenter_id`
+-  removed the optional property `items/items/id` from the response with the `200` status (media type: application/json)
+-  removed the optional property `items/items/id` from the response with the `200` status (media type: text/plain)
+-  removed the optional property `items/items/id` from the response with the `200` status (media type: text/json)
+
+
+### GET /api/v1/dms/accountings-history
+-  added the new optional `query` request parameter `bookkeeping_id`
+-  added the new optional `query` request parameter `creditor_id`
+
+
+### GET /api/v1/dms/accountings-history/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/accounts
+-  added the new optional `query` request parameter `bookkeeping_id`
+-  added the new optional `query` request parameter `type`
+
+
+### POST /api/v1/dms/accounts
+- :warning: api removed without deprecation
+
+
+### GET /api/v1/dms/accounts/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/appliances/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/bookkeepings
+-  removed the optional property `items/items/erpref` from the response with the `200` status (media type: text/json)
+-  removed the optional property `items/items/erpref` from the response with the `200` status (media type: text/plain)
+-  removed the optional property `items/items/erpref` from the response with the `200` status (media type: application/json)
+
+
+### GET /api/v1/dms/bookkeepings/{uuid}
+-  added the new optional `header` request parameter `if-none-match`
+-  the response header `etag` was added for the status `200`
+-  added the non-success response with the status `304`
+-  removed the optional property `erpref` from the response with the `200` status (media type: text/plain)
+-  removed the optional property `erpref` from the response with the `200` status (media type: text/json)
+-  removed the optional property `erpref` from the response with the `200` status (media type: application/json)
+
+
+### GET /api/v1/dms/cost-centers/{uuid}
+-  endpoint added
+
+
+### POST /api/v1/dms/creditors
+- :warning: removed the request property `name` (media type: text/json)
+- :warning: removed the request property `name` (media type: application/*+json)
+- :warning: removed the request property `name` (media type: application/json)
+-  added the new optional request property `person` (media type: text/json)
+-  added the new optional request property `person` (media type: application/json)
+-  added the new optional request property `person` (media type: application/*+json)
+-  the request property `personid` became nullable (media type: text/json)
+-  the request property `personid` became nullable (media type: application/*+json)
+-  the request property `personid` became nullable (media type: application/json)
+-  added the non-success response with the status `409`
+
+
+### GET /api/v1/dms/creditors/{uuid}
+-  added the new optional `header` request parameter `if-none-match`
+-  the response header `etag` was added for the status `200`
+-  added the non-success response with the status `304`
+
+
+### GET /api/v1/dms/documents
+- :warning: the response property `items/items/filedate` became nullable for the status `200` (media type: application/json)
+- :warning: the response property `items/items/filedate` became nullable for the status `200` (media type: text/plain)
+- :warning: the response property `items/items/filedate` became nullable for the status `200` (media type: text/json)
+-  added the new optional `query` request parameter `archive_uuid`
+-  added the new optional `query` request parameter `requires_dms_archiving`
+
+
+### POST /api/v1/dms/documents
+- :warning: the response property `filedate` became nullable for the status `201` (media type: text/plain)
+- :warning: the response property `filedate` became nullable for the status `201` (media type: text/json)
+- :warning: the response property `filedate` became nullable for the status `201` (media type: application/json)
+-  added the non-success response with the status `409`
+
+
+### GET /api/v1/dms/documents/{uuid}
+- :warning: the response property `filedate` became nullable for the status `200` (media type: text/plain)
+- :warning: the response property `filedate` became nullable for the status `200` (media type: text/json)
+- :warning: the response property `filedate` became nullable for the status `200` (media type: application/json)
+
+
+### PATCH /api/v1/dms/documents/{uuid}
+- :warning: the response property `filedate` became nullable for the status `200` (media type: text/plain)
+- :warning: the response property `filedate` became nullable for the status `200` (media type: text/json)
+- :warning: the response property `filedate` became nullable for the status `200` (media type: application/json)
+
+
+### PUT /api/v1/dms/documents/{uuid}
+- :warning: the response property `filedate` became nullable for the status `200` (media type: text/json)
+- :warning: the response property `filedate` became nullable for the status `200` (media type: application/json)
+- :warning: the response property `filedate` became nullable for the status `200` (media type: text/plain)
+
+
+### GET /api/v1/dms/houses/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/invoices/{uuid}
+-  added the new optional `header` request parameter `if-none-match`
+-  the response header `etag` was added for the status `200`
+-  added the non-success response with the status `304`
+
+
+### GET /api/v1/dms/payment-accounts
+-  added the new optional `query` request parameter `creditor_id`
+
+
+### GET /api/v1/dms/payment-accounts/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/payout-bank-account-bookkeepings
+-  endpoint added
+
+
+### GET /api/v1/dms/payout-bank-accounts
+-  endpoint added
+
+
+### GET /api/v1/dms/payout-bank-accounts/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/payoutbankaccountbookkeepings
+- :warning: api path removed without deprecation
+
+
+### GET /api/v1/dms/payoutbankaccounts
+- :warning: api path removed without deprecation
+
+
+### GET /api/v1/dms/persons
+- :warning: added the new `Female` enum value to the `items/items/gender` response property for the response status `200` (media type: application/json)
+- :warning: added the new `Female` enum value to the `items/items/gender` response property for the response status `200` (media type: text/json)
+- :warning: added the new `Female` enum value to the `items/items/gender` response property for the response status `200` (media type: text/plain)
+- :warning: added the new `Male` enum value to the `items/items/gender` response property for the response status `200` (media type: text/json)
+- :warning: added the new `Male` enum value to the `items/items/gender` response property for the response status `200` (media type: text/plain)
+- :warning: added the new `Male` enum value to the `items/items/gender` response property for the response status `200` (media type: application/json)
+- :warning: added the new `Neutral` enum value to the `items/items/gender` response property for the response status `200` (media type: application/json)
+- :warning: added the new `Neutral` enum value to the `items/items/gender` response property for the response status `200` (media type: text/json)
+- :warning: added the new `Neutral` enum value to the `items/items/gender` response property for the response status `200` (media type: text/plain)
+- :warning: added the new `Undefined` enum value to the `items/items/gender` response property for the response status `200` (media type: text/json)
+- :warning: added the new `Undefined` enum value to the `items/items/gender` response property for the response status `200` (media type: application/json)
+- :warning: added the new `Undefined` enum value to the `items/items/gender` response property for the response status `200` (media type: text/plain)
+- :warning: the `items/items/gender` response's property `type/format` changed from `integer/int32` to `string` for status `200` (media type: text/plain)
+- :warning: the `items/items/gender` response's property `type/format` changed from `integer/int32` to `string` for status `200` (media type: application/json)
+- :warning: the `items/items/gender` response's property `type/format` changed from `integer/int32` to `string` for status `200` (media type: text/json)
+
+
+### GET /api/v1/dms/persons/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/realestate-persons/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/realestates/number:{number}
+-  added the new optional `header` request parameter `if-none-match`
+-  the response header `etag` was added for the status `200`
+-  added the non-success response with the status `304`
+
+
+### GET /api/v1/dms/tenancies/{uuid}
+-  added the new optional `header` request parameter `if-none-match`
+-  the response header `etag` was added for the status `200`
+-  added the non-success response with the status `304`
+
+
+### GET /api/v1/dms/tenancy-persons/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/tenants/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/units/{uuid}
+-  endpoint added
+
+
+### GET /api/v1/dms/vat-codes
+-  added the new optional `query` request parameter `bookkeeping_id`
+
+
+### GET /api/v1/dms/vat-codes/{uuid}
+-  endpoint added
+
+
+
+
+## Components
+-  removed the schema `AccountRequest`
+
+
 ## 2026-09-16 · Polaris-Build 20260916.3 (`04a7f940a806`)
 
 **Breaking – `POST /invoices` antwortet auf `400` in einem anderen Schema.** Bisher kamen
