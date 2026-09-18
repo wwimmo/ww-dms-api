@@ -30,10 +30,9 @@ info:
     load) and `changed_until` (default: no upper bound). Sending `changed_since` alone is the
     normal polling pattern. `changed_since` after `changed_until` is rejected with **400**.
 
-    The following endpoints accept the window but **cannot apply it** — their ERP source carries no
-    change timestamps, so every call returns the full set: `/accounts`, `/account-cost-centers`,
-    `/cost-centers`, `/creditors`, `/payment-accounts`, `/payoutbankaccounts`, `/vat-codes`,
-    `/accountings-history`. Poll these on a slower schedule and diff locally.
+    For the ERP-backed lists (`/accounts`, `/account-cost-centers`, `/cost-centers`, `/creditors`,
+    `/payment-accounts`, `/payout-bank-accounts`, `/vat-codes`, `/accountings-history`, `/documents`)
+    the window is forwarded to the ERP, which filters at the source.
 
     Deletions are not published: a removed document or master-data record simply stops appearing.
     There are no tombstones and no webhooks — every consumer polls.
@@ -48,8 +47,8 @@ info:
     `REQUIRED`; a value that cannot be read at all — a malformed UUID, a wrong JSON type — answers
     `INVALID_FORMAT` on that field.
   version: v1
-  x-build-sha: 04a7f940a806f29789f52f3abae07f582cb8ebac
-  x-build-number: '20260916.3'
+  x-build-sha: e00ad7968b6d3f209ec7a9bdc2f35badb038bcf6
+  x-build-number: '20260917.1'
 servers:
 - url: https://erp-test.wwimmo.net
   description: Test – Sandbox für Partner
@@ -64,11 +63,10 @@ paths:
     get:
       tags:
       - Account
-      summary: Lists all accounts; the delta window is accepted but not applied.
+      summary: Lists accounts, optionally narrowed to one bookkeeping and/or one account type.
       description: |-
-        The delta window is accepted for contract symmetry but not applied: the ERP source of this list
-        carries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff
-        locally instead of relying on `changed_since`.
+        The delta window and the filters are forwarded to the ERP, which filters at the source. Pagination
+        happens in memory because the provider returns the window as one list.
       parameters:
       - name: changed_since
         in: query
@@ -80,6 +78,15 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: bookkeeping_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: type
+        in: query
+        schema:
+          $ref: '#/components/schemas/AccountType'
       - name: page
         in: query
         schema:
@@ -117,24 +124,34 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-    post:
+  /api/v1/dms/accounts/{uuid}:
+    get:
       tags:
       - Account
-      summary: Creates an account in the ERP and returns it with its id.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AccountRequest'
-          text/json:
-            schema:
-              $ref: '#/components/schemas/AccountRequest'
-          application/*+json:
-            schema:
-              $ref: '#/components/schemas/AccountRequest'
+      summary: Returns an account by id. Sends its `ETag`; `If-None-Match` with the current value answers
+        304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
       responses:
-        '201':
-          description: Created
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -145,8 +162,8 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/AccountResponse'
-        '400':
-          description: Bad Request
+        '404':
+          description: Not Found
           content:
             text/plain:
               schema:
@@ -157,15 +174,18 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/account-cost-centers:
     get:
       tags:
       - AccountCostCenter
-      summary: Lists all account-to-cost-center assignments; the delta window is accepted but not applied.
+      summary: Lists which cost centers an account may be posted to, optionally narrowed to one account
+        and/or one cost center.
       description: |-
-        The delta window is accepted for contract symmetry but not applied: the ERP source of this list
-        carries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff
-        locally instead of relying on `changed_since`.
+        The assignment has no id of its own: it is keyed by (`accountid`, `costcenterid`), so there
+        is no single-item route and the two filters are the way to address one. The delta window and the
+        filters are forwarded to the ERP; pagination happens in memory.
       parameters:
       - name: changed_since
         in: query
@@ -177,6 +197,16 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: costcenter_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: page
         in: query
         schema:
@@ -218,12 +248,10 @@ paths:
     get:
       tags:
       - AccountingHistory
-      summary: Lists the accounting history (past booking lines); the delta window is accepted but not
-        applied.
+      summary: Lists past account assignments, optionally narrowed to one creditor and/or one bookkeeping.
       description: |-
-        The delta window is accepted for contract symmetry but not applied: the ERP source of this list
-        carries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff
-        locally instead of relying on `changed_since`.
+        The delta window and the filters are forwarded to the ERP, which filters at the source. Pagination
+        happens in memory because the provider returns the window as one list.
       parameters:
       - name: changed_since
         in: query
@@ -235,6 +263,16 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: creditor_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: bookkeeping_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: page
         in: query
         schema:
@@ -272,6 +310,58 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/accountings-history/{uuid}:
+    get:
+      tags:
+      - AccountingHistory
+      summary: Returns an accounting history entry by id. Sends its `ETag`; `If-None-Match` with the current
+        value answers 304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/AccountingHistoryResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingHistoryResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/AccountingHistoryResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/appliances:
     get:
       tags:
@@ -325,6 +415,58 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/appliances/{uuid}:
+    get:
+      tags:
+      - Appliance
+      summary: Returns an appliance by id. Sends its `ETag`; `If-None-Match` with the current value answers
+        304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ApplianceResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplianceResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ApplianceResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/bookkeepings:
     get:
       tags:
@@ -390,9 +532,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
       responses:
         '200':
           description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -415,15 +569,16 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/cost-centers:
     get:
       tags:
       - CostCenter
       summary: Lists all cost centers (ImmoTop2 only); the delta window is accepted but not applied.
       description: |-
-        The delta window is accepted for contract symmetry but not applied: the ERP source of this list
-        carries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff
-        locally instead of relying on `changed_since`.
+        The delta window is forwarded to the ERP, which filters at the source. Pagination happens in memory
+        because the provider returns the window as one list.
       parameters:
       - name: changed_since
         in: query
@@ -472,6 +627,58 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/cost-centers/{uuid}:
+    get:
+      tags:
+      - CostCenter
+      summary: Returns a cost center by id. Sends its `ETag`; `If-None-Match` with the current value answers
+        304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/CostCenterResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/CostCenterResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/creditors:
     get:
       tags:
@@ -533,7 +740,16 @@ paths:
     post:
       tags:
       - Creditor
-      summary: Creates a creditor in the ERP and returns it with its id.
+      summary: 'Creates a creditor: flags an existing person (`personid`) or creates a new one (`person`).'
+      description: |-
+        Exactly one of `personid` and `person` must be given. The ERP is the authority on the person
+        master data: it checks that `personid` exists, that `number` is free, that zip/city and the
+        country codes are known, and refuses duplicates (same `vatuid`, same `email`, or same name at
+        the same zip) with 409. A 409 names the existing creditor as `existingId` and, when the ERP knows
+        it, the person behind it as `personid` — send that as `personid` to flag it instead. The
+        response is the created creditor as `GET /creditors/{uuid}` returns it, with its ETag; the person
+        itself appears in `GET /persons` after the next synchronisation. Not idempotent: a retry after a
+        timeout is caught only by the duplicate rules.
       requestBody:
         content:
           application/json:
@@ -570,6 +786,18 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/dms/creditors/{uuid}:
     get:
       tags:
@@ -582,9 +810,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
       responses:
         '200':
           description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -607,14 +847,20 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/documents:
     get:
       tags:
       - Document
-      summary: Lists documents changed in the given window, newest data first.
+      summary: Lists documents changed in the given window.
       description: |-
-        Add the flag `requires_dms_archiving` (no value needed) to get only documents that still
-        need archiving, i.e. `storageTargets` contains `DMS` and `dmsReference` is unset.
+        `requires_dms_archiving=true` lists only documents that still need archiving, i.e.
+                    `dmsReference` is unset — the DMS's pick-up list; `false` lists only archived ones. The bare
+                    flag (`?requires_dms_archiving` without a value) means `true`. `archive_uuid` narrows
+                    the list to the documents the ERP routes to one DMS archive; a DMS serving several archives polls
+                    once per archive. The ERP does not yet report `type` on read, so it is `null` for documents
+                    that originate there.
       parameters:
       - name: changed_since
         in: query
@@ -626,6 +872,15 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: requires_dms_archiving
+        in: query
+        schema:
+          type: boolean
+      - name: archive_uuid
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: page
         in: query
         schema:
@@ -666,13 +921,18 @@ paths:
     post:
       tags:
       - Document
-      summary: Archives a document in the ERP and returns the id to store on the DMS side.
+      summary: Registers a document the DMS has archived with the ERP and returns the ERP's id for it.
       description: |-
-        Links must point at existing Stammdaten of the calling customer (`realestate`, `house`,
-        `unit`, `appliance`, `tenant`, `tenancy`); an unknown id is rejected with 400.
-        A retry after a timeout creates a second document — there is no idempotency key yet: documents live in
-        the in-memory ERP document store, and the `Idempotency-Key` that `POST /invoices` supports will
-        be enabled here once that store is durable.
+        Metadata only — the file stays in the DMS, so `GET …/content` answers 404 for a document created
+        here. The ERP requires `dmsReference.documentId`, `dmsReference.archive` (the uuid of one of
+        its archives) and a `portfolio` or `realestate` link to file the document under; `type`
+        must be one of its configured document types. A request the ERP refuses answers 400 with the ERP's
+        reason as `detail`. `type` and the links' `entity-type` are forwarded as sent: which
+        values and combinations are valid is the ERP's vocabulary (its document-types endpoint), and the ERP
+        also decides whether a link target exists. A second document with the same
+        `dmsReference` answers 409 and names the existing one in `existingId`, so a retry after a
+        timeout is safe. The 201 carries the `ETag` of the stored document, ready for a guarded
+        follow-up write.
       requestBody:
         content:
           application/json:
@@ -699,6 +959,18 @@ paths:
                 $ref: '#/components/schemas/DocumentResponse'
         '400':
           description: Bad Request
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
           content:
             text/plain:
               schema:
@@ -766,10 +1038,11 @@ paths:
       summary: Replaces a document completely.
       description: |-
         This is a full replacement: properties missing from the body are cleared, so `links` and
-        `storageTargets` have to be sent along. To change single properties — the archiving hand-back
-        in particular — use `PATCH`. Send `If-Match` with the document's ETag to be told (412)
-        instead of overwriting a version you have not seen. Where the operator has made the header
-        mandatory, a request without it answers 428.
+        `storageTargets` have to be sent along, and the same fields are required as for `POST`.
+        To change single properties — the archiving hand-back in particular — use `PATCH`. Send
+        `If-Match` with the document's ETag to be told (412) instead of overwriting a version you have
+        not seen; where the operator has made the header mandatory, a request without it answers 428. The
+        200 carries the new `ETag`.
       parameters:
       - name: uuid
         in: path
@@ -864,9 +1137,10 @@ paths:
       summary: Updates single properties of a document; omitted properties stay as they are.
       description: |-
         Partial update: omitted properties keep their stored value. This is the endpoint for the DMS
-        archiving hand-back (`{ "dmsReference": { … } }`) — unlike `PUT`, which replaces the whole
-        document and therefore clears `links` and `storageTargets` when they are not sent along.
-        An explicit `null` also means "unchanged"; clearing a field is done with `PUT`.
+        archiving hand-back (`{ "dmsReference": { "documentId": "…" } }`) — unlike `PUT`, which
+        replaces the whole document and therefore clears `links` and `storageTargets` when they
+        are not sent along. An explicit `null` also means "unchanged"; clearing a field is done with
+        `PUT`. A body without any property to apply answers 400. The 200 carries the new `ETag`.
       parameters:
       - name: uuid
         in: path
@@ -1019,6 +1293,10 @@ paths:
       tags:
       - Document
       summary: Downloads the file, with the stored MIME type and file name.
+      description: |-
+        Only documents that originate in the ERP have a file there; a document the DMS registered via
+        `POST` is stored in the DMS. Both "unknown document" and "document without a file" answer 404,
+        and the `detail` says which one it is.
       parameters:
       - name: uuid
         in: path
@@ -1124,6 +1402,58 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/houses/{uuid}:
+    get:
+      tags:
+      - House
+      summary: Returns a house by id. Sends its `ETag`; `If-None-Match` with the current value answers
+        304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/HouseResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/HouseResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/info:
     get:
       tags:
@@ -1337,9 +1667,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
       responses:
         '200':
           description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -1362,6 +1704,8 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/orders:
     get:
       tags:
@@ -1456,11 +1800,10 @@ paths:
     get:
       tags:
       - PaymentAccount
-      summary: Lists all creditor payment accounts; the delta window is accepted but not applied.
+      summary: Lists payment accounts, optionally narrowed to one creditor.
       description: |-
-        The delta window is accepted for contract symmetry but not applied: the ERP source of this list
-        carries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff
-        locally instead of relying on `changed_since`.
+        The delta window and the filter are forwarded to the ERP, which filters at the source. Pagination
+        happens in memory because the provider returns the window as one list.
       parameters:
       - name: changed_since
         in: query
@@ -1472,6 +1815,11 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: creditor_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: page
         in: query
         schema:
@@ -1509,15 +1857,67 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-  /api/v1/dms/payoutbankaccounts:
+  /api/v1/dms/payment-accounts/{uuid}:
+    get:
+      tags:
+      - PaymentAccount
+      summary: Returns a payment account by id. Sends its `ETag`; `If-None-Match` with the current value
+        answers 304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/PaymentAccountResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAccountResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAccountResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
+  /api/v1/dms/payout-bank-accounts:
     get:
       tags:
       - PayoutBankAccount
       summary: Lists all payout bank accounts; the delta window is accepted but not applied.
       description: |-
-        The delta window is accepted for contract symmetry but not applied: the ERP source of this list
-        carries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff
-        locally instead of relying on `changed_since`.
+        The delta window is forwarded to the ERP, which filters at the source. Pagination happens in memory
+        because the provider returns the window as one list. Which bookkeepings an account serves is listed
+        by `/payout-bank-account-bookkeepings`.
       parameters:
       - name: changed_since
         in: query
@@ -1566,12 +1966,63 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-  /api/v1/dms/payoutbankaccountbookkeepings:
+  /api/v1/dms/payout-bank-accounts/{uuid}:
+    get:
+      tags:
+      - PayoutBankAccount
+      summary: Returns a payout bank account by id. Sends its `ETag`; `If-None-Match` with the current
+        value answers 304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/PayoutBankAccountResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBankAccountResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBankAccountResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
+  /api/v1/dms/payout-bank-account-bookkeepings:
     get:
       tags:
       - PayoutBankAccountBookkeeping
-      summary: Lists payout-bank-account-to-bookkeeping links changed in the given window, optionally
-        filtered by either side.
+      summary: Lists which payout bank account serves which bookkeeping, optionally narrowed to one side.
       parameters:
       - name: changed_since
         in: query
@@ -1583,12 +2034,12 @@ paths:
         schema:
           type: string
           format: date-time
-      - name: payoutbankaccountid
+      - name: payout_bank_account_id
         in: query
         schema:
           type: string
           format: uuid
-      - name: bookkeepingid
+      - name: bookkeeping_id
         in: query
         schema:
           type: string
@@ -1683,6 +2134,58 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/persons/{uuid}:
+    get:
+      tags:
+      - Person
+      summary: Returns a person by id. Sends its `ETag`; `If-None-Match` with the current value answers
+        304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/PersonResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/PersonResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/portfolios:
     get:
       tags:
@@ -1902,9 +2405,21 @@ paths:
         required: true
         schema:
           type: string
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
       responses:
         '200':
           description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -1927,6 +2442,8 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/realestate-persons:
     get:
       tags:
@@ -1980,6 +2497,58 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/realestate-persons/{uuid}:
+    get:
+      tags:
+      - RealestatePerson
+      summary: Returns a realestate-person link by id. Sends its `ETag`; `If-None-Match` with the current
+        value answers 304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/RealestatePersonResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealestatePersonResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/RealestatePersonResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/tenancies:
     get:
       tags:
@@ -2045,9 +2614,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
       responses:
         '200':
           description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
           content:
             text/plain:
               schema:
@@ -2070,6 +2651,8 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/tenancy-persons:
     get:
       tags:
@@ -2123,6 +2706,58 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/tenancy-persons/{uuid}:
+    get:
+      tags:
+      - TenancyPerson
+      summary: Returns a tenancy-person link by id. Sends its `ETag`; `If-None-Match` with the current
+        value answers 304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/TenancyPersonResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenancyPersonResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/TenancyPersonResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/tenants:
     get:
       tags:
@@ -2176,6 +2811,58 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/tenants/{uuid}:
+    get:
+      tags:
+      - Tenant
+      summary: Returns a tenant by id. Sends its `ETag`; `If-None-Match` with the current value answers
+        304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/token:
     post:
       tags:
@@ -2284,15 +2971,66 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/units/{uuid}:
+    get:
+      tags:
+      - Unit
+      summary: Returns a unit by id. Sends its `ETag`; `If-None-Match` with the current value answers
+        304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/UnitResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/UnitResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
   /api/v1/dms/vat-codes:
     get:
       tags:
       - VatCode
-      summary: Lists all VAT codes; the delta window is accepted but not applied.
+      summary: Lists VAT codes, optionally narrowed to one bookkeeping.
       description: |-
-        The delta window is accepted for contract symmetry but not applied: the ERP source of this list
-        carries no change timestamps, so every call returns the full set. Poll on a slow schedule and diff
-        locally instead of relying on `changed_since`.
+        The delta window and the filter are forwarded to the ERP, which filters at the source. Pagination
+        happens in memory because the provider returns the window as one list.
       parameters:
       - name: changed_since
         in: query
@@ -2304,6 +3042,11 @@ paths:
         schema:
           type: string
           format: date-time
+      - name: bookkeeping_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: page
         in: query
         schema:
@@ -2341,14 +3084,63 @@ paths:
             text/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/dms/vat-codes/{uuid}:
+    get:
+      tags:
+      - VatCode
+      summary: Returns a VAT code by id. Sends its `ETag`; `If-None-Match` with the current value answers
+        304.
+      parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-None-Match
+        in: header
+        description: The `ETag` from a previous response. When the resource has not changed, the API answers
+          304 Not Modified without a body.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          headers:
+            ETag:
+              description: Version token of this resource. Send it back as `If-None-Match` when polling
+                and as `If-Match` when writing.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/VatCodeResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VatCodeResponse'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/VatCodeResponse'
+        '404':
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '304':
+          description: Not Modified
 components:
   schemas:
     AccountCostCenterResponse:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
         accountid:
           type: string
           format: uuid
@@ -2363,8 +3155,9 @@ components:
           nullable: true
       additionalProperties: false
       description: |-
-        DMS REST response shape for an ERP account-cost center assignment
-                    (Konti-Kostenstellen-Zuweisung; frozen wire contract for the external DMS consumer).
+        DMS REST response shape for an ERP account-cost center assignment (Konti-Kostenstellen-Zuweisung;
+        frozen wire contract for the external DMS consumer). The assignment has no id: the ERP keys it by
+        (account, cost center), so the pair is the identity.
     AccountCostCenterResponsePaginatedResponse:
       type: object
       properties:
@@ -2389,44 +3182,6 @@ components:
           readOnly: true
       additionalProperties: false
       description: Paginated REST envelope returned by the DMS BFF to its external consumer.
-    AccountRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          nullable: true
-        number:
-          type: string
-          nullable: true
-        type:
-          $ref: '#/components/schemas/AccountType'
-        validfrom:
-          type: string
-          nullable: true
-        validto:
-          type: string
-          nullable: true
-        bookkeepingid:
-          type: string
-          nullable: true
-        tenantid:
-          type: string
-          nullable: true
-        requirescostcenter:
-          type: boolean
-        requiresquantitiy:
-          type: boolean
-        unitofmeasure:
-          $ref: '#/components/schemas/UnitOfMeasure'
-        vatconfig:
-          $ref: '#/components/schemas/VatConfig'
-        defaultvatcodeid:
-          type: string
-          nullable: true
-        extracostdate:
-          type: boolean
-      additionalProperties: false
-      description: Request contract for creating an ERP account. JSON keys pinned to the published contract.
     AccountResponse:
       type: object
       properties:
@@ -2623,9 +3378,6 @@ components:
           type: string
           format: uuid
           nullable: true
-        erpref:
-          type: string
-          nullable: true
       additionalProperties: false
       description: |-
         DMS REST response shape for an ERP bookkeeping unit (Buchhaltungseinheit) — the central
@@ -2679,6 +3431,22 @@ components:
           nullable: true
       additionalProperties: false
       description: Information about the authenticated caller extracted from the JWT token.
+    CivilState:
+      enum:
+      - Undefined
+      - Unmarried
+      - Married
+      - Separated
+      - Divorced
+      - Widowed
+      - RegisteredPartnership
+      type: string
+      description: |-
+        Civil state of a person (Zivilstand) exposed on the DMS wire as a speaking enum instead of the raw code.
+        Backed by common enumeration key 20 (`common.civilstate`); the numeric code stays in the DB/ERP and
+        is mapped to/from this enum in the DMS UseCases layer only (#22269). Members and codes mirror the
+        mobile.wiki data model page "common enumerations", the source of truth. The ERP translates these portal
+        codes into its own Zivilstand list; WWImmo.Polaris.Dms.Endpoints.Enumerations.CivilState.Separated has no counterpart there and is stored as none.
     ClientCredentialsTokenRequest:
       required:
       - client_id
@@ -2738,30 +3506,122 @@ components:
           readOnly: true
       additionalProperties: false
       description: Paginated REST envelope returned by the DMS BFF to its external consumer.
-    CreditorRequest:
+    CreditorPersonRequest:
       type: object
       properties:
-        name:
+        legal:
+          type: boolean
+          description: Legal person (company). Default false = natural person.
+        gender:
+          $ref: '#/components/schemas/Gender'
+        salutation:
           type: string
-          description: Display name of the creditor.
+          description: Salutation, e.g. "Herr".
           nullable: true
-        number:
-          type: integer
-          description: Human-readable creditor number (nullable).
-          format: int32
+        salutationletter:
+          type: string
+          description: Letter salutation, e.g. "Sehr geehrter Herr Muster".
           nullable: true
-        personid:
+        name1:
           type: string
-          description: FK to the person carrying name/address/contact details.
-          format: uuid
-        vatuid:
+          description: 'Natural person: first name. Legal person: company name (required).'
+          nullable: true
+        name2:
           type: string
-          description: VAT UID of the creditor (e.g. "CHE-123.456.789 MWST", max 28 chars, nullable).
+          description: 'Natural person: last name (required). Legal person: addition, e.g. a branch.'
+          nullable: true
+        email:
+          type: string
+          description: 'Also a duplicate-detection key: an existing person with this e-mail yields 409.'
+          nullable: true
+        mobile:
+          type: string
+          nullable: true
+        phoneprivate:
+          type: string
+          nullable: true
+        phonebusiness:
+          type: string
+          nullable: true
+        birthdate:
+          type: string
+          description: ISO date, e.g. 1970-05-01.
+          format: date
+          nullable: true
+        civilstate:
+          $ref: '#/components/schemas/CivilState'
+        hometown:
+          type: string
+          description: Place of origin (Heimatort).
+          nullable: true
+        nationality:
+          type: string
+          description: 'ISO 3166-1 alpha-2, e.g. CH. Unknown to the ERP: 400.'
+          nullable: true
+        language:
+          type: string
+          description: 'ISO 639-1, e.g. de. Accepted but not stored: the ERP keeps no language on a person.'
+          nullable: true
+        remarks:
+          type: string
+          description: Free-text remarks; not limited to 100 characters.
+          nullable: true
+        street:
+          type: string
+          description: |-
+            Address (optional). As soon as one address field is set, WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorPersonRequest.Zip or WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorPersonRequest.City must be
+            present and must exist in the ERP's zip directory. Stored as the correspondence address valid from today.
+          nullable: true
+        housenumber:
+          type: string
+          nullable: true
+        zip:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2 of the address; the ERP derives it from the zip when absent.
           nullable: true
       additionalProperties: false
       description: |-
-        Request contract for creating an ERP creditor (Polaris, wiki 2476). Name/address/contact details are
-        managed on the linked person (WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorRequest.Personid), not on the creditor.
+        A new person to create together with a creditor (`POST /creditors`). Same properties and meaning as a
+        `/persons` item (without `id`/`updated`), extended by the remaining person Stammdaten
+        fields, so a partner writes what it reads. All text fields are limited to 100 characters except
+        WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorPersonRequest.Remarks. JSON keys are pinned all-lowercase to match the published contract.
+    CreditorRequest:
+      type: object
+      properties:
+        personid:
+          type: string
+          description: Id of an existing person (from `/persons`) to flag as creditor. Alternative to
+            WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorRequest.Person.
+          format: uuid
+          nullable: true
+        person:
+          $ref: '#/components/schemas/CreditorPersonRequest'
+        number:
+          type: integer
+          description: |-
+            Creditor number (positive). Omitted: the ERP assigns the next free one; taken: 409. With
+            WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorRequest.Personid it may only repeat the person's existing number.
+          format: int32
+          nullable: true
+        vatuid:
+          type: string
+          description: VAT UID (e.g. "CHE-123.456.789 MWST", max 30 characters). Also a duplicate-detection
+            key.
+          nullable: true
+      additionalProperties: false
+      description: |-
+        Request contract for creating a creditor (story #23955). In the ERP a creditor is a person flagged as
+        creditor, so the body carries <b>either</b>WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorRequest.Personid (an existing person from
+        `/persons` is flagged) <b>or</b>WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorRequest.Person (a new person is created and flagged) —
+        exactly one of the two. WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorRequest.Number and WWImmo.Polaris.Dms.Endpoints.Creditors.CreditorRequest.Vatuid are optional in both variants.
+        Unknown properties are rejected, as the ERP does; in particular the former `name` property is gone —
+        the display name is derived from the person.
     CreditorResponse:
       type: object
       properties:
@@ -2954,8 +3814,10 @@ components:
         filedate:
           type: string
           format: date-time
+          nullable: true
         type:
           type: string
+          description: Document type as the ERP names it; `null` when the ERP has not mapped it yet.
           nullable: true
         mime-type:
           type: string
@@ -3008,6 +3870,18 @@ components:
           readOnly: true
       additionalProperties: false
       description: Paginated REST envelope returned by the DMS BFF to its external consumer.
+    Gender:
+      enum:
+      - Undefined
+      - Male
+      - Female
+      - Neutral
+      type: string
+      description: |-
+        Gender of a person (Geschlecht) exposed on the DMS wire as a speaking enum instead of the raw code.
+        Backed by common enumeration key 19 (`common.gender`); the numeric code stays in the DB/ERP and is
+        mapped to/from this enum in the DMS UseCases layer only (#22269). Members and codes mirror the
+        mobile.wiki data model page "common enumerations", the source of truth.
     HealthResponse:
       type: object
       properties:
@@ -3934,8 +4808,7 @@ components:
         legal:
           type: boolean
         gender:
-          type: integer
-          format: int32
+          $ref: '#/components/schemas/Gender'
         name1:
           type: string
           nullable: true

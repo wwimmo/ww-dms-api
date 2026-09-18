@@ -98,16 +98,19 @@ hat, steht im [CHANGELOG](CHANGELOG.md).
 
 ### Was die Spezifikation abdeckt
 
-- **Dokumente:** `GET /documents` (paginiert, Zeitfenster, Flag `requires_dms_archiving`),
-  `POST /documents`, `GET /documents/{uuid}` (mit `ETag`), `PATCH /documents/{uuid}` (Teilaktualisierung),
-  `PUT /documents/{uuid}` (Vollersatz), `DELETE /documents/{uuid}`, `GET /documents/{uuid}/content`.
-- **Stammdaten** (`GET`, mit `changed_since` + `changed_until`, paginiert): `/realestates`
-  (+ `/{uuid}`, `/number:{number}`), `/portfolios` (+ `/{uuid}`), `/houses`, `/units`, `/appliances`,
-  `/tenants`, `/tenancies` (+ `/{uuid}`), `/persons`, `/realestate-persons`, `/tenancy-persons`.
+- **Dokumente:** `GET /documents` (paginiert, Zeitfenster, Filter `requires_dms_archiving` und
+  `archive_uuid`), `POST /documents`, `GET /documents/{uuid}` (mit `ETag`), `PATCH /documents/{uuid}`
+  (Teilaktualisierung), `PUT /documents/{uuid}` (Vollersatz), `DELETE /documents/{uuid}`,
+  `GET /documents/{uuid}/content`.
+- **Stammdaten** (`GET`, mit `changed_since` + `changed_until`, paginiert, je Ressource ein
+  Einzelabruf `/{uuid}` mit `ETag`): `/realestates` (+ `/number:{number}`), `/portfolios`, `/houses`,
+  `/units`, `/appliances`, `/tenants`, `/tenancies`, `/persons`, `/realestate-persons`,
+  `/tenancy-persons`.
 - **Buchhaltung & Rechnungen (Kreditorenprozess):** `/bookkeepings` (+ `/{uuid}`), `/creditors`
-  (GET/POST, + `/{uuid}`), `/accounts` (GET/POST), `/payment-accounts`, `/payoutbankaccounts`,
-  `/payoutbankaccountbookkeepings`, `/cost-centers`, `/account-cost-centers`, `/vat-codes`,
-  `/accountings-history`, `/orders` (+ `/{uuid}`), `/invoices` (GET/POST, + `/{uuid}` GET).
+  (GET/POST, + `/{uuid}`), `/accounts` (+ `/{uuid}`), `/payment-accounts` (+ `/{uuid}`),
+  `/payout-bank-accounts` (+ `/{uuid}`), `/payout-bank-account-bookkeepings`, `/cost-centers`
+  (+ `/{uuid}`), `/account-cost-centers`, `/vat-codes` (+ `/{uuid}`), `/accountings-history`
+  (+ `/{uuid}`), `/orders` (+ `/{uuid}`), `/invoices` (GET/POST, + `/{uuid}` GET).
 - **Betrieb:** `GET /health` (anonym), `GET /info`, `POST /token` (Authentifizierung).
 - **Querschnitt:** Paginierung (`page`, `page_size`, `Link`-Header), Rate-Limit-Budget auf jeder Antwort
   (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`) und `Retry-After` bei `429`, `If-Match`/`ETag`, `Idempotency-Key`/`Idempotency-Replayed` (nur `POST /invoices`), `bearerAuth` (JWT). Siehe

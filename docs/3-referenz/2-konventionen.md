@@ -27,7 +27,7 @@ GET /realestates?changed_since=2026-01-01T00:00:00Z&changed_until=2026-01-08T00:
   deshalb ein 1–2 Stunden **grösseres** Fenster liefern als erwartet – Sie erhalten also eher zu viele als
   zu wenige Datensätze. Verarbeiten Sie Wiederholungen idempotent (siehe unten).
 - Einige Buchhaltungslisten (`accounts`, `account-cost-centers`, `cost-centers`, `vat-codes`,
-  `payment-accounts`, `payoutbankaccounts`, `accountings-history`) nehmen das Fenster an, wenden es aber
+  `payment-accounts`, `payout-bank-accounts`, `accountings-history`) nehmen das Fenster an, wenden es aber
   nicht an – ihre ERP-Quelle kennt keine Änderungsstempel. Sie liefern immer den vollen Bestand: seltener
   abrufen und lokal vergleichen.
 - `requires_dms_archiving` (nur `GET /documents`) ist ein Flag ohne Wert: nur Dokumente, deren
