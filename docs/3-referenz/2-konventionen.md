@@ -174,9 +174,17 @@ Alle Endpunkte sind rate-limitiert:
 | Anonyme Endpunkte (`/token`, `/health`) | Fixed Window pro IP | 30 Anfragen/Minute |
 | Authentifizierte Daten-Endpunkte | Token-Bucket pro `client_id` | 100 Burst, 50 Anfragen/Minute |
 
-Erfolgreiche Antworten tragen **keine** Rate-Limit-Header. Erst bei Überschreitung antwortet die API mit
-`429 Too Many Requests`, den Headern `Retry-After` (Sekunden), `X-RateLimit-Remaining: 0` und
-`X-RateLimit-Reset` (Unix-Sekunden) sowie dem Body
+Jede rate-limitierte Antwort, erfolgreich oder `429`, meldet Ihr Budget in drei Headern:
+
+| Header | Bedeutung |
+| --- | --- |
+| `X-RateLimit-Limit` | Anfragen pro Fenster (anonym) bzw. Kapazität des Token-Buckets (authentifiziert) |
+| `X-RateLimit-Remaining` | Nach dieser Anfrage verbleibende Anfragen im Fenster bzw. Tokens im Bucket |
+| `X-RateLimit-Reset` | Unix-Sekunden, zu denen das Fenster endet bzw. der Bucket das nächste Mal aufgefüllt wird |
+
+Richten Sie Ihr Polling an `X-RateLimit-Remaining` aus, statt in den `429` zu laufen. Bei Überschreitung
+antwortet die API mit `429 Too Many Requests`, zusätzlich `Retry-After` (Sekunden), `X-RateLimit-Remaining: 0`
+und `X-RateLimit-Reset` als Zeitpunkt des nächsten Versuchs, sowie dem Body
 `{ "error": "Too many requests", "message": "Rate limit exceeded. Please try again later.", "retryAfter": <sekunden|null> }`
 (`application/json`, kein Problem-Format). Empfohlen: exponentielles Backoff mit Jitter (siehe
 [Fehlerbehandlung](3-fehler.md)).

@@ -36,7 +36,9 @@ Prüfen Sie den `Content-Type` der Antwort, bevor Sie parsen:
 
 1. **`429 Too Many Requests`** (`application/json`):
    `{ "error": "Too many requests", "message": "Rate limit exceeded. Please try again later.", "retryAfter": <sekunden|null> }`
-   mit den Headern `Retry-After`, `X-RateLimit-Remaining: 0`, `X-RateLimit-Reset`.
+   mit den Headern `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining: 0`, `X-RateLimit-Reset`
+   (die drei `X-RateLimit-*`-Header kommen auf jeder Antwort, siehe
+   [Konventionen → Rate-Limits](2-konventionen.md#rate-limits)).
 2. **Token-Endpunkt** `POST /token` (`application/json`): `401` `{ "error": "invalid_client", "message": … }`,
    `502` `{ "error": "service_unavailable", "message": … }`.
 3. **`POST /invoices` – fachliche Validierung** (`application/json`):
