@@ -80,7 +80,7 @@ Werden vom Rechnungsimport genutzt. Am Endpunkt hängen sie an der **Buchhaltung
 Diese Entitäten sind in der [OpenAPI-Spezifikation](../../openapi/dms-api.v1.yaml) als `GET`-Endpunkte
 abgebildet (paginiert, mit `changed_since` + `changed_until`); `creditors`, `accounts` und `invoices`
 bieten zusätzlich `POST`. Die Listen `accounts`, `account-cost-centers`, `cost-centers`, `vat-codes`,
-`payment-accounts`, `payoutbankaccounts` und `accountings-history` akzeptieren das Zeitfenster, wenden es
+`payment-accounts`, `payout-bank-accounts` und `accountings-history` akzeptieren das Zeitfenster, wenden es
 aber nicht an (ihre ERP-Quelle kennt keine Änderungsstempel) – sie liefern immer den vollen Bestand.
 
 ## Personen & Rollen
